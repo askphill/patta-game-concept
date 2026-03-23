@@ -47,12 +47,12 @@ canvas {
     display: flex;
     align-items: center;
     gap: 20px;
-    transition: gap 0.4s ease-in-out, width 0.5s ease-in-out, padding 0.5s ease-in-out;
+    transition: gap 0.4s ease-in-out;
     z-index: 2;
 }
 
 .logo {
-    transition: width 0.5s ease-in-out, height 0.5s ease-in-out;
+    transition: width 0.5s ease-in-out, height 0.5s ease-in-out, transform 0.5s ease-in-out;
 }
 
 .logo-patta {
@@ -143,23 +143,9 @@ canvas {
     margin-bottom: 20px;
 }
 
-/* Logos in splash position: scaled up, centered in gaps between panel and viewport edges */
+/* Logos in splash position: scaled up, translated outward from center */
 .loading-row.splash-position {
-    width: 100vw;
-    justify-content: space-between;
-    /* Center each logo in the gap: (viewport - panel) / 4 from each edge */
-    padding: 0 calc((100vw - min(403px, 90vw)) / 4);
     gap: 0;
-}
-
-.loading-row.splash-position .logo-patta {
-    width: 125px;
-    height: 76px;
-}
-
-.loading-row.splash-position .logo-nike {
-    width: 113px;
-    height: 46px;
 }
 
 .loading-row.splash-position .progress-bar {
@@ -169,17 +155,28 @@ canvas {
     overflow: hidden;
 }
 
+.loading-row.splash-position .logo-patta {
+    width: 125px;
+    height: 76px;
+    transform: translateX(calc(-25vw + 60px));
+}
+
+.loading-row.splash-position .logo-nike {
+    width: 113px;
+    height: 46px;
+    transform: translateX(calc(25vw - 55px));
+}
+
 @media (max-width: 500px) {
-    .loading-row.splash-position {
-        padding: 0 4vw;
-    }
     .loading-row.splash-position .logo-patta {
         width: 65px;
         height: 39px;
+        transform: translateX(calc(-20vw + 30px));
     }
     .loading-row.splash-position .logo-nike {
         width: 60px;
         height: 25px;
+        transform: translateX(calc(20vw - 28px));
     }
 }
 

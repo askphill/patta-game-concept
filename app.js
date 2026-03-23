@@ -130,14 +130,9 @@ function startPhase3() {
 
     // Pause 200ms, then reveal splash
     setTimeout(() => {
-        // Expand panel
+        // Expand panel and move logos outward
         splashPanel.classList.add('visible');
-        // Move logos to splash position on next frame so browser renders converged state first
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                loadingRow.classList.add('splash-position');
-            });
-        });
+        loadingRow.classList.add('splash-position');
 
         // Wait for splash expand, then show menu
         setTimeout(startPhase4, 500 + 1500); // 500ms expand + 1500ms hold
