@@ -1,122 +1,236 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// ── PATTA 8-BIT SPLASH SCREEN ──
-let splashDone = false;
-let splashAlpha = 0;
-let splashPhase = 'loading'; // loading, fadein, hold, fadeout
-let splashTimer = 0;
-const SPLASH_FADEIN = 40;
-const SPLASH_HOLD = 80;
-const SPLASH_FADEOUT = 30;
+// ── LOADING OVERLAY CONTROLLER ──
+const overlay = document.getElementById('loading-overlay');
+const progressFill = document.querySelector('.progress-fill');
+const loadingRow = document.querySelector('.loading-row');
+const splashPanel = document.querySelector('.splash-panel');
+const menuButtons = document.querySelectorAll('.menu-btn');
+const menuFooter = document.querySelector('.menu-footer');
+const btnPlay = document.querySelector('.btn-play');
 
-// Load the Patta logo and pixelate it
-const pattaLogo = new Image();
-pattaLogo.crossOrigin = 'anonymous';
-pattaLogo.src = 'https://media.licdn.com/dms/image/v2/C4E0BAQHYB-iO4I6EbQ/company-logo_200_200/company-logo_200_200/0/1631315551876?e=2147483647&v=beta&t=6qRaETsboeI9krlHzZOidQQjG3wyvwqi7fpKYB797_4';
-let pixelatedLogo = null;
+const ASSETS_TO_LOAD = [
+    'assets/patta-logo.png',
+    'assets/nike-swoosh.png',
+    'assets/pattern-tile.png',
+    'assets/tournament-title.png',
+    'assets/btn-play.png',
+    'assets/btn-signup.png',
+    'assets/btn-collection.png',
+    'assets/btn-leaderboard.png',
+    'assets/soccer-ball.png',
+];
 
-pattaLogo.onload = function() {
-    // Render logo small then scale up for 8-bit effect
-    const small = document.createElement('canvas');
-    const pixelSize = 4; // lower = more pixelated
-    const smallW = Math.floor(200 / pixelSize);
-    const smallH = Math.floor(200 / pixelSize);
-    small.width = smallW;
-    small.height = smallH;
-    const sctx = small.getContext('2d');
-    sctx.imageSmoothingEnabled = false;
-    sctx.drawImage(pattaLogo, 0, 0, smallW, smallH);
+let loadedCount = 0;
+let loadingComplete = false;
+const LOAD_TIMEOUT = 10000; // 10 seconds
+const MIN_LOAD_TIME = 2000; // minimum 2 seconds for the loading bar
 
-    // Create upscaled pixelated version
-    const big = document.createElement('canvas');
-    const displaySize = 200;
-    big.width = displaySize;
-    big.height = displaySize;
-    const bctx = big.getContext('2d');
-    bctx.imageSmoothingEnabled = false;
-    bctx.drawImage(small, 0, 0, displaySize, displaySize);
+function preloadAssets() {
+    const totalAssets = ASSETS_TO_LOAD.length;
+    const failedAssets = new Set();
+    const loadStart = Date.now();
+    let allAssetsReady = false;
 
-    // Invert colors: black text becomes white, white bg becomes transparent
-    const imgData = bctx.getImageData(0, 0, displaySize, displaySize);
-    const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-        const brightness = (d[i] + d[i+1] + d[i+2]) / 3;
-        if (brightness > 200) {
-            // White/light background -> transparent
-            d[i+3] = 0;
-        } else {
-            // Dark pixels (the logo text) -> white
-            d[i] = 255;
-            d[i+1] = 255;
-            d[i+2] = 255;
-            d[i+3] = Math.round(255 - brightness); // darker = more opaque
+    const timeoutId = setTimeout(() => {
+        if (!loadingComplete) {
+            loadingComplete = true;
+            progressFill.style.width = '100%';
+            applyAssetFallbacks(failedAssets);
+            startPhase2();
+        }
+    }, LOAD_TIMEOUT);
+
+    function onAssetDone() {
+        if (loadingComplete) return;
+
+        // Animate progress bar based on time elapsed + actual progress
+        const realProgress = loadedCount / totalAssets;
+        const timeProgress = Math.min((Date.now() - loadStart) / MIN_LOAD_TIME, 1);
+        const displayProgress = Math.min(realProgress, timeProgress) * 100;
+        progressFill.style.width = displayProgress + '%';
+
+        if (loadedCount >= totalAssets) {
+            allAssetsReady = true;
+            const elapsed = Date.now() - loadStart;
+            const remaining = Math.max(0, MIN_LOAD_TIME - elapsed);
+
+            // Smoothly fill the remaining progress over the remaining time
+            if (remaining > 0) {
+                progressFill.style.transition = `width ${remaining}ms linear`;
+                progressFill.style.width = '100%';
+            }
+
+            setTimeout(() => {
+                if (!loadingComplete) {
+                    loadingComplete = true;
+                    clearTimeout(timeoutId);
+                    applyAssetFallbacks(failedAssets);
+                    startPhase2();
+                }
+            }, remaining);
         }
     }
-    bctx.putImageData(imgData, 0, 0);
 
-    pixelatedLogo = big;
-    splashPhase = 'fadein';
-    splashTimer = 0;
-};
+    // Tick the progress bar forward even while waiting for assets
+    const tickInterval = setInterval(() => {
+        if (loadingComplete || allAssetsReady) {
+            clearInterval(tickInterval);
+            return;
+        }
+        const timeProgress = Math.min((Date.now() - loadStart) / MIN_LOAD_TIME, 1);
+        const realProgress = loadedCount / totalAssets;
+        const displayProgress = Math.min(realProgress, timeProgress) * 100;
+        progressFill.style.width = displayProgress + '%';
+    }, 50);
 
-pattaLogo.onerror = function() {
-    // If logo fails to load, skip splash
-    splashPhase = 'fadein';
-    splashTimer = 0;
-};
-
-function drawSplashScreen() {
-    // While loading, show black screen
-    if (splashPhase === 'loading') {
-        ctx.fillStyle = '#0f0e17';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        return;
-    }
-
-    splashTimer++;
-
-    if (splashPhase === 'fadein') {
-        splashAlpha = Math.min(splashTimer / SPLASH_FADEIN, 1);
-        if (splashTimer >= SPLASH_FADEIN) { splashPhase = 'hold'; splashTimer = 0; }
-    } else if (splashPhase === 'hold') {
-        splashAlpha = 1;
-        if (splashTimer >= SPLASH_HOLD) { splashPhase = 'fadeout'; splashTimer = 0; }
-    } else if (splashPhase === 'fadeout') {
-        splashAlpha = 1 - Math.min(splashTimer / SPLASH_FADEOUT, 1);
-        if (splashTimer >= SPLASH_FADEOUT) { splashDone = true; return; }
-    }
-
-    // Background
-    ctx.fillStyle = '#0f0e17';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.globalAlpha = splashAlpha;
-
-    // Scanline effect
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    for (let y = 0; y < canvas.height; y += 4) {
-        ctx.fillRect(0, y, canvas.width, 2);
-    }
-
-    // Draw pixelated white Patta logo centered
-    if (pixelatedLogo) {
-        const logoSize = 200;
-        const lx = (canvas.width - logoSize) / 2;
-        const ly = (canvas.height - logoSize) / 2;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(pixelatedLogo, lx, ly, logoSize, logoSize);
-    }
-
-    ctx.globalAlpha = 1;
+    ASSETS_TO_LOAD.forEach((src) => {
+        const img = new Image();
+        img.onload = () => {
+            loadedCount++;
+            onAssetDone();
+        };
+        img.onerror = () => {
+            loadedCount++;
+            failedAssets.add(src);
+            onAssetDone();
+        };
+        img.src = src;
+    });
 }
 
-// Allow skip splash with tap/space
-function skipSplash() {
-    if (!splashDone && splashPhase !== 'fadeout') {
-        splashPhase = 'fadeout';
-        splashTimer = 0;
+// Hide broken images for failed asset loads
+function applyAssetFallbacks(failedAssets) {
+    if (failedAssets.size === 0) return;
+    const titleImg = document.querySelector('.tournament-title');
+    if (failedAssets.has('assets/tournament-title.png') && titleImg) {
+        titleImg.style.display = 'none';
     }
+    if (failedAssets.has('assets/pattern-tile.png')) {
+        splashPanel.style.backgroundImage = 'none';
+        splashPanel.style.background = '#111';
+    }
+}
+
+function startPhase2() {
+    // Pause 300ms at 100%, then converge
+    setTimeout(() => {
+        loadingRow.querySelector('.progress-bar').style.opacity = '0';
+
+        setTimeout(() => {
+            loadingRow.classList.add('converged');
+            // Wait for convergence transition (400ms) to finish
+            phase3Timeout = setTimeout(startPhase3, 450);
+        }, 200); // bar fade duration
+    }, 300); // pause at 100%
+}
+
+let phase3Started = false;
+let phase3Timeout = null;
+function startPhase3() {
+    if (phase3Started) return;
+    phase3Started = true;
+    if (phase3Timeout) clearTimeout(phase3Timeout);
+
+    // Pause 200ms, then reveal splash
+    setTimeout(() => {
+        // Expand panel and move logos outward
+        splashPanel.classList.add('visible');
+        loadingRow.classList.add('splash-position');
+
+        // Wait for splash expand, then show menu
+        setTimeout(startPhase4, 500 + 1500); // 500ms expand + 1500ms hold
+    }, 200);
+}
+
+function startPhase4() {
+    sessionStorage.setItem('patta-loaded', '1');
+
+    // Animate title from center to top
+    splashPanel.classList.add('menu-active');
+
+    // Stagger buttons in after title starts moving (300ms delay)
+    setTimeout(() => {
+        menuButtons.forEach((btn, i) => {
+            setTimeout(() => {
+                btn.classList.add('visible');
+            }, i * 100);
+        });
+
+        // Footer after last button
+        setTimeout(() => {
+            menuFooter.classList.add('visible');
+        }, (menuButtons.length - 1) * 100 + 300 + 200);
+    }, 300);
+}
+
+// Skip to final menu state on tap/space during phases 1-3
+function skipToMenu() {
+    if (loadingComplete && menuButtons[0].classList.contains('visible')) return;
+
+    loadingComplete = true;
+    progressFill.style.width = '100%';
+    phase3Started = true;
+
+    // Instantly set all states
+    loadingRow.classList.add('converged', 'splash-position');
+    loadingRow.querySelector('.progress-bar').style.opacity = '0';
+    splashPanel.classList.add('visible', 'menu-active');
+
+    // Show buttons immediately
+    menuButtons.forEach(btn => btn.classList.add('visible'));
+    menuFooter.classList.add('visible');
+}
+
+overlay.addEventListener('click', (e) => {
+    if (!splashPanel.classList.contains('game-active')) {
+        skipToMenu();
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !splashPanel.classList.contains('game-active') && overlay.style.display !== 'none') {
+        e.preventDefault();
+        skipToMenu();
+    }
+});
+
+function startGame() {
+    // Show canvas inside the panel, hide menu content
+    splashPanel.classList.add('game-active');
+    canvas.classList.add('active');
+    update(); // Start the game loop
+}
+
+btnPlay.addEventListener('click', (e) => {
+    e.stopPropagation(); // Don't trigger skipToMenu
+    startGame();
+});
+
+// Prevent other menu buttons from triggering skip
+document.querySelectorAll('.menu-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => e.stopPropagation());
+});
+
+// Skip loading animation on repeat visits (session)
+if (sessionStorage.getItem('patta-loaded')) {
+    overlay.classList.add('skip-intro');
+    // Set final state instantly (no transitions on inner elements)
+    loadingComplete = true;
+    phase3Started = true;
+    progressFill.style.width = '100%';
+    loadingRow.classList.add('converged');
+    loadingRow.querySelector('.progress-bar').style.opacity = '0';
+    splashPanel.classList.add('menu-active');
+    menuButtons.forEach(btn => btn.classList.add('visible'));
+    menuFooter.classList.add('visible');
+    // Animate panel scale + logo outward slide on next frame
+    requestAnimationFrame(() => {
+        splashPanel.classList.add('visible');
+        loadingRow.classList.add('splash-position');
+    });
+} else {
+    preloadAssets();
 }
 
 // Game constants
@@ -152,7 +266,7 @@ function getLevel(s) {
 }
 
 // Game state
-let ball = { x: canvas.width / 2, y: canvas.height / 2, vy: 0, vx: 0 };
+let ball = { x: canvas.width / 2, y: canvas.height / 2, vy: 0, vx: 0, angle: 0, spin: 0 };
 let score = 0;
 let highScore = parseInt(localStorage.getItem('keepballup_high') || '0');
 let state = 'start'; // 'start', 'playing', 'over', 'leveltransition'
@@ -186,7 +300,7 @@ const COLORS = {
 function resetGame() {
     score = 0;
     currentLevel = 0;
-    ball = { x: canvas.width / 2, y: GROUND_Y - BALL_SIZE - 50, vy: 0, vx: 0 };
+    ball = { x: canvas.width / 2, y: GROUND_Y - BALL_SIZE - 50, vy: 0, vx: 0, angle: 0, spin: 0 };
     canKick = true;
     wasGoingDown = false;
     updateZone();
@@ -251,6 +365,7 @@ function kick() {
         // First kick is free
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 4;
+        ball.spin = ball.vx * 0.08;
         score = 1;
         canKick = false;
         screenShake = 4;
@@ -276,6 +391,7 @@ function kick() {
 
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 4;
+        ball.spin = ball.vx * 0.08;
         score++;
         screenShake = 4;
         spawnParticles(ball.x, ball.y);
@@ -297,20 +413,18 @@ function kick() {
 
 document.addEventListener('keydown', function(e) {
     if (e.code === 'Space') {
+        if (overlay.style.display !== 'none') return;
         e.preventDefault();
-        if (!splashDone) { skipSplash(); return; }
         kick();
     }
 });
 
 canvas.addEventListener('touchstart', function(e) {
     e.preventDefault();
-    if (!splashDone) { skipSplash(); return; }
     kick();
 });
 
 canvas.addEventListener('mousedown', function(e) {
-    if (!splashDone) { skipSplash(); return; }
     kick();
 });
 
@@ -563,121 +677,34 @@ function drawLevelTransition() {
         // Resume with a free kick
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 3;
+        ball.spin = ball.vx * 0.08;
         canKick = false;
         wasGoingDown = false;
     }
 }
 
-// Pre-render a soccer ball: draw smooth, then pixelate
-let soccerBallCanvas = null;
-function renderSoccerBall() {
-    // Step 1: Draw a nice soccer ball at high res
-    const hiRes = 128;
-    const tmp = document.createElement('canvas');
-    tmp.width = hiRes;
-    tmp.height = hiRes;
-    const t = tmp.getContext('2d');
-    const cx = hiRes / 2, cy = hiRes / 2, r = hiRes / 2 - 2;
-
-    // White ball base
-    t.beginPath();
-    t.arc(cx, cy, r, 0, Math.PI * 2);
-    t.fillStyle = '#ffffff';
-    t.fill();
-    t.strokeStyle = '#000000';
-    t.lineWidth = 3;
-    t.stroke();
-
-    // Draw black pentagons (classic Telstar pattern)
-    function drawPentagon(px, py, size) {
-        t.beginPath();
-        for (let i = 0; i < 5; i++) {
-            const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-            const x = px + Math.cos(angle) * size;
-            const y = py + Math.sin(angle) * size;
-            if (i === 0) t.moveTo(x, y); else t.lineTo(x, y);
-        }
-        t.closePath();
-        t.fillStyle = '#000000';
-        t.fill();
-    }
-
-    // Center pentagon
-    drawPentagon(cx, cy, r * 0.28);
-
-    // Surrounding pentagons (partially visible at edges)
-    for (let i = 0; i < 5; i++) {
-        const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-        const px = cx + Math.cos(angle) * r * 0.75;
-        const py = cy + Math.sin(angle) * r * 0.75;
-        drawPentagon(px, py, r * 0.22);
-    }
-
-    // Draw seam lines from center pentagon to outer pentagons
-    t.strokeStyle = '#333333';
-    t.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-        const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-        t.beginPath();
-        t.moveTo(cx + Math.cos(angle) * r * 0.28, cy + Math.sin(angle) * r * 0.28);
-        t.lineTo(cx + Math.cos(angle) * r * 0.53, cy + Math.sin(angle) * r * 0.53);
-        t.stroke();
-    }
-
-    // Light shading gradient
-    const grad = t.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.4)');
-    grad.addColorStop(0.7, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.2)');
-    t.beginPath();
-    t.arc(cx, cy, r, 0, Math.PI * 2);
-    t.fillStyle = grad;
-    t.fill();
-
-    // Clip to circle
-    const clipped = document.createElement('canvas');
-    clipped.width = hiRes;
-    clipped.height = hiRes;
-    const cc = clipped.getContext('2d');
-    cc.beginPath();
-    cc.arc(cx, cy, r, 0, Math.PI * 2);
-    cc.clip();
-    cc.drawImage(tmp, 0, 0);
-
-    // Step 2: Pixelate by downscaling then upscaling
-    const loRes = 16; // low res for pixel look
-    const small = document.createElement('canvas');
-    small.width = loRes;
-    small.height = loRes;
-    const s = small.getContext('2d');
-    s.imageSmoothingEnabled = true;
-    s.drawImage(clipped, 0, 0, loRes, loRes);
-
-    // Step 3: Scale back up with no smoothing
-    const finalSize = 64;
-    soccerBallCanvas = document.createElement('canvas');
-    soccerBallCanvas.width = finalSize;
-    soccerBallCanvas.height = finalSize;
-    const f = soccerBallCanvas.getContext('2d');
-    f.imageSmoothingEnabled = false;
-    f.drawImage(small, 0, 0, finalSize, finalSize);
-}
-renderSoccerBall();
+// Load soccer ball from Figma asset
+const soccerBallImg = new Image();
+soccerBallImg.src = 'assets/soccer-ball.png';
 
 function drawBall() {
     let shadowScale = 1 - (GROUND_Y - ball.y) / canvas.height;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.fillRect(ball.x - BALL_SIZE * shadowScale / 2, GROUND_Y + 4, BALL_SIZE * shadowScale, 4);
 
-    // Draw the 8-bit soccer ball sprite
+    // Draw the soccer ball sprite rotated by velocity
+    ctx.save();
+    ctx.translate(Math.round(ball.x), Math.round(ball.y));
+    ctx.rotate(ball.angle);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-        soccerBallCanvas,
-        Math.round(ball.x - BALL_SIZE),
-        Math.round(ball.y - BALL_SIZE),
+        soccerBallImg,
+        -BALL_SIZE,
+        -BALL_SIZE,
         BALL_SIZE * 2,
         BALL_SIZE * 2
     );
+    ctx.restore();
 }
 
 function updateParticles() {
@@ -719,12 +746,6 @@ function drawStars() {
 
 // Main game loop
 function update() {
-    if (!splashDone) {
-        drawSplashScreen();
-        requestAnimationFrame(update);
-        return;
-    }
-
     let shakeX = 0, shakeY = 0;
     if (screenShake > 0) {
         shakeX = (Math.random() - 0.5) * screenShake;
@@ -759,6 +780,10 @@ function update() {
         ball.y += ball.vy;
         ball.x += ball.vx;
 
+        // Spin physics: angular velocity with air friction
+        ball.angle += ball.spin;
+        ball.spin *= 0.997; // air drag on spin
+
         // Track ball direction: only re-enable kick after ball went UP then starts falling
         if (ball.vy < -2) {
             // Ball is going up with force — mark it
@@ -770,20 +795,23 @@ function update() {
             canKick = true;
         }
 
-        // Bounce off walls
+        // Bounce off walls — reverse spin on impact
         if (ball.x < BALL_SIZE) {
             ball.x = BALL_SIZE;
             ball.vx = -ball.vx * 0.8;
+            ball.spin = -ball.spin * 0.6 + ball.vy * 0.03;
         }
         if (ball.x > canvas.width - BALL_SIZE) {
             ball.x = canvas.width - BALL_SIZE;
             ball.vx = -ball.vx * 0.8;
+            ball.spin = -ball.spin * 0.6 - ball.vy * 0.03;
         }
 
         // Bounce off ceiling
         if (ball.y < BALL_SIZE) {
             ball.y = BALL_SIZE;
             ball.vy = Math.abs(ball.vy) * 0.5;
+            ball.spin += ball.vx * 0.04;
         }
 
         // Hit ground = game over
@@ -847,4 +875,4 @@ function update() {
     requestAnimationFrame(update);
 }
 
-update();
+// Game loop is started by the loading overlay when "Play Game" is clicked
