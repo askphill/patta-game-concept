@@ -3,10 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keep The Ball Up - 8-Bit Ball Game</title>
+    <title>Patta International Soccer Tournament</title>
     <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+    <div id="loading-overlay">
+        <!-- Phase 1: Loading bar -->
+        <div class="loading-row">
+            <img src="assets/patta-logo.png" alt="Patta" class="logo logo-patta" />
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <img src="assets/nike-swoosh.png" alt="Nike" class="logo logo-nike" />
+        </div>
+
+        <!-- Phase 3: Splash panel (hidden initially) -->
+        <div class="splash-panel">
+            <img src="assets/tournament-title.png" alt="International Patta Soccer Tournament" class="tournament-title" />
+
+            <!-- Phase 4: Menu buttons (hidden initially) -->
+            <div class="menu-buttons">
+                <button class="menu-btn btn-play">PLAY GAME</button>
+                <button class="menu-btn btn-signup">SIGN UP</button>
+                <button class="menu-btn btn-collection">VIEW PRODUCT/COLLECTION</button>
+                <button class="menu-btn btn-leaderboard">VIEW LEADERBOARD</button>
+            </div>
+            <footer class="menu-footer">&copy; 2026 Patta. All rights reserved.</footer>
+        </div>
+    </div>
+
     <canvas id="game" width="400" height="600"></canvas>
     <script src="app.js"></script>
 </body>
