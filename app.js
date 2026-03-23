@@ -1,124 +1,6 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// ── PATTA 8-BIT SPLASH SCREEN ──
-let splashDone = false;
-let splashAlpha = 0;
-let splashPhase = 'loading'; // loading, fadein, hold, fadeout
-let splashTimer = 0;
-const SPLASH_FADEIN = 40;
-const SPLASH_HOLD = 80;
-const SPLASH_FADEOUT = 30;
-
-// Load the Patta logo and pixelate it
-const pattaLogo = new Image();
-pattaLogo.crossOrigin = 'anonymous';
-pattaLogo.src = 'https://media.licdn.com/dms/image/v2/C4E0BAQHYB-iO4I6EbQ/company-logo_200_200/company-logo_200_200/0/1631315551876?e=2147483647&v=beta&t=6qRaETsboeI9krlHzZOidQQjG3wyvwqi7fpKYB797_4';
-let pixelatedLogo = null;
-
-pattaLogo.onload = function() {
-    // Render logo small then scale up for 8-bit effect
-    const small = document.createElement('canvas');
-    const pixelSize = 4; // lower = more pixelated
-    const smallW = Math.floor(200 / pixelSize);
-    const smallH = Math.floor(200 / pixelSize);
-    small.width = smallW;
-    small.height = smallH;
-    const sctx = small.getContext('2d');
-    sctx.imageSmoothingEnabled = false;
-    sctx.drawImage(pattaLogo, 0, 0, smallW, smallH);
-
-    // Create upscaled pixelated version
-    const big = document.createElement('canvas');
-    const displaySize = 200;
-    big.width = displaySize;
-    big.height = displaySize;
-    const bctx = big.getContext('2d');
-    bctx.imageSmoothingEnabled = false;
-    bctx.drawImage(small, 0, 0, displaySize, displaySize);
-
-    // Invert colors: black text becomes white, white bg becomes transparent
-    const imgData = bctx.getImageData(0, 0, displaySize, displaySize);
-    const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-        const brightness = (d[i] + d[i+1] + d[i+2]) / 3;
-        if (brightness > 200) {
-            // White/light background -> transparent
-            d[i+3] = 0;
-        } else {
-            // Dark pixels (the logo text) -> white
-            d[i] = 255;
-            d[i+1] = 255;
-            d[i+2] = 255;
-            d[i+3] = Math.round(255 - brightness); // darker = more opaque
-        }
-    }
-    bctx.putImageData(imgData, 0, 0);
-
-    pixelatedLogo = big;
-    splashPhase = 'fadein';
-    splashTimer = 0;
-};
-
-pattaLogo.onerror = function() {
-    // If logo fails to load, skip splash
-    splashPhase = 'fadein';
-    splashTimer = 0;
-};
-
-function drawSplashScreen() {
-    // While loading, show black screen
-    if (splashPhase === 'loading') {
-        ctx.fillStyle = '#0f0e17';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        return;
-    }
-
-    splashTimer++;
-
-    if (splashPhase === 'fadein') {
-        splashAlpha = Math.min(splashTimer / SPLASH_FADEIN, 1);
-        if (splashTimer >= SPLASH_FADEIN) { splashPhase = 'hold'; splashTimer = 0; }
-    } else if (splashPhase === 'hold') {
-        splashAlpha = 1;
-        if (splashTimer >= SPLASH_HOLD) { splashPhase = 'fadeout'; splashTimer = 0; }
-    } else if (splashPhase === 'fadeout') {
-        splashAlpha = 1 - Math.min(splashTimer / SPLASH_FADEOUT, 1);
-        if (splashTimer >= SPLASH_FADEOUT) { splashDone = true; return; }
-    }
-
-    // Background
-    ctx.fillStyle = '#0f0e17';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.globalAlpha = splashAlpha;
-
-    // Scanline effect
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    for (let y = 0; y < canvas.height; y += 4) {
-        ctx.fillRect(0, y, canvas.width, 2);
-    }
-
-    // Draw pixelated white Patta logo centered
-    if (pixelatedLogo) {
-        const logoSize = 200;
-        const lx = (canvas.width - logoSize) / 2;
-        const ly = (canvas.height - logoSize) / 2;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(pixelatedLogo, lx, ly, logoSize, logoSize);
-    }
-
-    ctx.globalAlpha = 1;
-}
-
-// Allow skip splash with tap/space
-function skipSplash() {
-    if (!splashDone && splashPhase !== 'fadeout') {
-        splashPhase = 'fadeout';
-        splashTimer = 0;
-    }
-}
-
 // Game constants
 const GRAVITY = 0.3;
 const KICK_FORCE = -10;
@@ -298,19 +180,16 @@ function kick() {
 document.addEventListener('keydown', function(e) {
     if (e.code === 'Space') {
         e.preventDefault();
-        if (!splashDone) { skipSplash(); return; }
         kick();
     }
 });
 
 canvas.addEventListener('touchstart', function(e) {
     e.preventDefault();
-    if (!splashDone) { skipSplash(); return; }
     kick();
 });
 
 canvas.addEventListener('mousedown', function(e) {
-    if (!splashDone) { skipSplash(); return; }
     kick();
 });
 
@@ -719,12 +598,6 @@ function drawStars() {
 
 // Main game loop
 function update() {
-    if (!splashDone) {
-        drawSplashScreen();
-        requestAnimationFrame(update);
-        return;
-    }
-
     let shakeX = 0, shakeY = 0;
     if (screenShake > 0) {
         shakeX = (Math.random() - 0.5) * screenShake;
@@ -847,4 +720,4 @@ function update() {
     requestAnimationFrame(update);
 }
 
-update();
+// Game loop is started by the loading overlay when "Play Game" is clicked
