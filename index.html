@@ -19,20 +19,20 @@
 
         <!-- Phase 3: Splash panel (hidden initially) -->
         <div class="splash-panel">
+            <canvas id="game" width="403" height="698"></canvas>
+
             <img src="assets/tournament-title.png" alt="International Patta Soccer Tournament" class="tournament-title" />
 
             <!-- Phase 4: Menu buttons (hidden initially) -->
             <div class="menu-buttons">
-                <button class="menu-btn btn-play">PLAY GAME</button>
-                <button class="menu-btn btn-signup">SIGN UP</button>
-                <button class="menu-btn btn-collection">VIEW PRODUCT/COLLECTION</button>
-                <button class="menu-btn btn-leaderboard">VIEW LEADERBOARD</button>
+                <button class="menu-btn btn-play" aria-label="Play Game"><img src="assets/btn-play.png" alt="Play Game" draggable="false" /></button>
+                <button class="menu-btn btn-signup" aria-label="Sign Up"><img src="assets/btn-signup.png" alt="Sign Up" draggable="false" /></button>
+                <button class="menu-btn btn-collection" aria-label="View Product/Collection"><img src="assets/btn-collection.png" alt="View Product/Collection" draggable="false" /></button>
+                <button class="menu-btn btn-leaderboard" aria-label="View Leaderboard"><img src="assets/btn-leaderboard.png" alt="View Leaderboard" draggable="false" /></button>
             </div>
             <footer class="menu-footer">&copy; 2026 Patta. All rights reserved.</footer>
         </div>
     </div>
-
-    <canvas id="game" width="400" height="600"></canvas>
     <script src="app.js"></script>
 </body>
 </html>

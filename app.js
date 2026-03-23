@@ -15,6 +15,11 @@ const ASSETS_TO_LOAD = [
     'assets/nike-swoosh.png',
     'assets/pattern-tile.png',
     'assets/tournament-title.png',
+    'assets/btn-play.png',
+    'assets/btn-signup.png',
+    'assets/btn-collection.png',
+    'assets/btn-leaderboard.png',
+    'assets/soccer-ball.png',
 ];
 
 let loadedCount = 0;
@@ -140,16 +145,24 @@ function startPhase3() {
 }
 
 function startPhase4() {
-    menuButtons.forEach((btn, i) => {
-        setTimeout(() => {
-            btn.classList.add('visible');
-        }, i * 100);
-    });
+    sessionStorage.setItem('patta-loaded', '1');
 
-    // Footer after last button
+    // Animate title from center to top
+    splashPanel.classList.add('menu-active');
+
+    // Stagger buttons in after title starts moving (300ms delay)
     setTimeout(() => {
-        menuFooter.classList.add('visible');
-    }, (menuButtons.length - 1) * 100 + 300 + 200);
+        menuButtons.forEach((btn, i) => {
+            setTimeout(() => {
+                btn.classList.add('visible');
+            }, i * 100);
+        });
+
+        // Footer after last button
+        setTimeout(() => {
+            menuFooter.classList.add('visible');
+        }, (menuButtons.length - 1) * 100 + 300 + 200);
+    }, 300);
 }
 
 // Skip to final menu state on tap/space during phases 1-3
@@ -163,33 +176,30 @@ function skipToMenu() {
     // Instantly set all states
     loadingRow.classList.add('converged', 'splash-position');
     loadingRow.querySelector('.progress-bar').style.opacity = '0';
-    splashPanel.classList.add('visible');
+    splashPanel.classList.add('visible', 'menu-active');
 
     // Show buttons immediately
     menuButtons.forEach(btn => btn.classList.add('visible'));
     menuFooter.classList.add('visible');
 }
 
-overlay.addEventListener('click', skipToMenu);
+overlay.addEventListener('click', (e) => {
+    if (!splashPanel.classList.contains('game-active')) {
+        skipToMenu();
+    }
+});
 document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && overlay.style.display !== 'none') {
+    if (e.code === 'Space' && !splashPanel.classList.contains('game-active') && overlay.style.display !== 'none') {
         e.preventDefault();
         skipToMenu();
     }
 });
 
 function startGame() {
-    const hideOverlayAndStart = () => {
-        overlay.style.display = 'none';
-        update(); // Start the game loop
-    };
-
-    if (document.startViewTransition) {
-        document.startViewTransition(hideOverlayAndStart);
-    } else {
-        overlay.classList.add('hidden');
-        setTimeout(hideOverlayAndStart, 300);
-    }
+    // Show canvas inside the panel, hide menu content
+    splashPanel.classList.add('game-active');
+    canvas.classList.add('active');
+    update(); // Start the game loop
 }
 
 btnPlay.addEventListener('click', (e) => {
@@ -202,8 +212,26 @@ document.querySelectorAll('.menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => e.stopPropagation());
 });
 
-// Start the loading sequence
-preloadAssets();
+// Skip loading animation on repeat visits (session)
+if (sessionStorage.getItem('patta-loaded')) {
+    overlay.classList.add('skip-intro');
+    // Set final state instantly (no transitions on inner elements)
+    loadingComplete = true;
+    phase3Started = true;
+    progressFill.style.width = '100%';
+    loadingRow.classList.add('converged');
+    loadingRow.querySelector('.progress-bar').style.opacity = '0';
+    splashPanel.classList.add('menu-active');
+    menuButtons.forEach(btn => btn.classList.add('visible'));
+    menuFooter.classList.add('visible');
+    // Animate panel scale + logo outward slide on next frame
+    requestAnimationFrame(() => {
+        splashPanel.classList.add('visible');
+        loadingRow.classList.add('splash-position');
+    });
+} else {
+    preloadAssets();
+}
 
 // Game constants
 const GRAVITY = 0.3;
@@ -238,7 +266,7 @@ function getLevel(s) {
 }
 
 // Game state
-let ball = { x: canvas.width / 2, y: canvas.height / 2, vy: 0, vx: 0 };
+let ball = { x: canvas.width / 2, y: canvas.height / 2, vy: 0, vx: 0, angle: 0, spin: 0 };
 let score = 0;
 let highScore = parseInt(localStorage.getItem('keepballup_high') || '0');
 let state = 'start'; // 'start', 'playing', 'over', 'leveltransition'
@@ -272,7 +300,7 @@ const COLORS = {
 function resetGame() {
     score = 0;
     currentLevel = 0;
-    ball = { x: canvas.width / 2, y: GROUND_Y - BALL_SIZE - 50, vy: 0, vx: 0 };
+    ball = { x: canvas.width / 2, y: GROUND_Y - BALL_SIZE - 50, vy: 0, vx: 0, angle: 0, spin: 0 };
     canKick = true;
     wasGoingDown = false;
     updateZone();
@@ -337,6 +365,7 @@ function kick() {
         // First kick is free
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 4;
+        ball.spin = ball.vx * 0.08;
         score = 1;
         canKick = false;
         screenShake = 4;
@@ -362,6 +391,7 @@ function kick() {
 
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 4;
+        ball.spin = ball.vx * 0.08;
         score++;
         screenShake = 4;
         spawnParticles(ball.x, ball.y);
@@ -647,121 +677,34 @@ function drawLevelTransition() {
         // Resume with a free kick
         ball.vy = KICK_FORCE;
         ball.vx = (Math.random() - 0.5) * 3;
+        ball.spin = ball.vx * 0.08;
         canKick = false;
         wasGoingDown = false;
     }
 }
 
-// Pre-render a soccer ball: draw smooth, then pixelate
-let soccerBallCanvas = null;
-function renderSoccerBall() {
-    // Step 1: Draw a nice soccer ball at high res
-    const hiRes = 128;
-    const tmp = document.createElement('canvas');
-    tmp.width = hiRes;
-    tmp.height = hiRes;
-    const t = tmp.getContext('2d');
-    const cx = hiRes / 2, cy = hiRes / 2, r = hiRes / 2 - 2;
-
-    // White ball base
-    t.beginPath();
-    t.arc(cx, cy, r, 0, Math.PI * 2);
-    t.fillStyle = '#ffffff';
-    t.fill();
-    t.strokeStyle = '#000000';
-    t.lineWidth = 3;
-    t.stroke();
-
-    // Draw black pentagons (classic Telstar pattern)
-    function drawPentagon(px, py, size) {
-        t.beginPath();
-        for (let i = 0; i < 5; i++) {
-            const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-            const x = px + Math.cos(angle) * size;
-            const y = py + Math.sin(angle) * size;
-            if (i === 0) t.moveTo(x, y); else t.lineTo(x, y);
-        }
-        t.closePath();
-        t.fillStyle = '#000000';
-        t.fill();
-    }
-
-    // Center pentagon
-    drawPentagon(cx, cy, r * 0.28);
-
-    // Surrounding pentagons (partially visible at edges)
-    for (let i = 0; i < 5; i++) {
-        const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-        const px = cx + Math.cos(angle) * r * 0.75;
-        const py = cy + Math.sin(angle) * r * 0.75;
-        drawPentagon(px, py, r * 0.22);
-    }
-
-    // Draw seam lines from center pentagon to outer pentagons
-    t.strokeStyle = '#333333';
-    t.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-        const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-        t.beginPath();
-        t.moveTo(cx + Math.cos(angle) * r * 0.28, cy + Math.sin(angle) * r * 0.28);
-        t.lineTo(cx + Math.cos(angle) * r * 0.53, cy + Math.sin(angle) * r * 0.53);
-        t.stroke();
-    }
-
-    // Light shading gradient
-    const grad = t.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.4)');
-    grad.addColorStop(0.7, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.2)');
-    t.beginPath();
-    t.arc(cx, cy, r, 0, Math.PI * 2);
-    t.fillStyle = grad;
-    t.fill();
-
-    // Clip to circle
-    const clipped = document.createElement('canvas');
-    clipped.width = hiRes;
-    clipped.height = hiRes;
-    const cc = clipped.getContext('2d');
-    cc.beginPath();
-    cc.arc(cx, cy, r, 0, Math.PI * 2);
-    cc.clip();
-    cc.drawImage(tmp, 0, 0);
-
-    // Step 2: Pixelate by downscaling then upscaling
-    const loRes = 16; // low res for pixel look
-    const small = document.createElement('canvas');
-    small.width = loRes;
-    small.height = loRes;
-    const s = small.getContext('2d');
-    s.imageSmoothingEnabled = true;
-    s.drawImage(clipped, 0, 0, loRes, loRes);
-
-    // Step 3: Scale back up with no smoothing
-    const finalSize = 64;
-    soccerBallCanvas = document.createElement('canvas');
-    soccerBallCanvas.width = finalSize;
-    soccerBallCanvas.height = finalSize;
-    const f = soccerBallCanvas.getContext('2d');
-    f.imageSmoothingEnabled = false;
-    f.drawImage(small, 0, 0, finalSize, finalSize);
-}
-renderSoccerBall();
+// Load soccer ball from Figma asset
+const soccerBallImg = new Image();
+soccerBallImg.src = 'assets/soccer-ball.png';
 
 function drawBall() {
     let shadowScale = 1 - (GROUND_Y - ball.y) / canvas.height;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.fillRect(ball.x - BALL_SIZE * shadowScale / 2, GROUND_Y + 4, BALL_SIZE * shadowScale, 4);
 
-    // Draw the 8-bit soccer ball sprite
+    // Draw the soccer ball sprite rotated by velocity
+    ctx.save();
+    ctx.translate(Math.round(ball.x), Math.round(ball.y));
+    ctx.rotate(ball.angle);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-        soccerBallCanvas,
-        Math.round(ball.x - BALL_SIZE),
-        Math.round(ball.y - BALL_SIZE),
+        soccerBallImg,
+        -BALL_SIZE,
+        -BALL_SIZE,
         BALL_SIZE * 2,
         BALL_SIZE * 2
     );
+    ctx.restore();
 }
 
 function updateParticles() {
@@ -837,6 +780,10 @@ function update() {
         ball.y += ball.vy;
         ball.x += ball.vx;
 
+        // Spin physics: angular velocity with air friction
+        ball.angle += ball.spin;
+        ball.spin *= 0.997; // air drag on spin
+
         // Track ball direction: only re-enable kick after ball went UP then starts falling
         if (ball.vy < -2) {
             // Ball is going up with force — mark it
@@ -848,20 +795,23 @@ function update() {
             canKick = true;
         }
 
-        // Bounce off walls
+        // Bounce off walls — reverse spin on impact
         if (ball.x < BALL_SIZE) {
             ball.x = BALL_SIZE;
             ball.vx = -ball.vx * 0.8;
+            ball.spin = -ball.spin * 0.6 + ball.vy * 0.03;
         }
         if (ball.x > canvas.width - BALL_SIZE) {
             ball.x = canvas.width - BALL_SIZE;
             ball.vx = -ball.vx * 0.8;
+            ball.spin = -ball.spin * 0.6 - ball.vy * 0.03;
         }
 
         // Bounce off ceiling
         if (ball.y < BALL_SIZE) {
             ball.y = BALL_SIZE;
             ball.vy = Math.abs(ball.vy) * 0.5;
+            ball.spin += ball.vx * 0.04;
         }
 
         // Hit ground = game over
