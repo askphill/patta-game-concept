@@ -217,8 +217,8 @@ canvas {
     filter: brightness(1.15);
 }
 
-.menu-btn:active {
-    transform: translateY(2px) !important;
+.menu-btn.visible:active {
+    transform: translateY(2px);
 }
 
 .menu-footer {

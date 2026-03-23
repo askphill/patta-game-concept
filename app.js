@@ -350,6 +350,7 @@ function kick() {
 
 document.addEventListener('keydown', function(e) {
     if (e.code === 'Space') {
+        if (overlay.style.display !== 'none') return;
         e.preventDefault();
         kick();
     }
