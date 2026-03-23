@@ -24,29 +24,54 @@ const LOAD_TIMEOUT = 10000; // 10 seconds
 function preloadAssets() {
     const totalAssets = ASSETS_TO_LOAD.length;
 
+    const failedAssets = new Set();
     const timeoutId = setTimeout(() => {
         if (!loadingComplete) {
             loadingComplete = true;
             progressFill.style.width = '100%';
+            applyAssetFallbacks(failedAssets);
             startPhase2();
         }
     }, LOAD_TIMEOUT);
 
     ASSETS_TO_LOAD.forEach((src) => {
         const img = new Image();
-        img.onload = img.onerror = () => {
+        img.onload = () => {
             loadedCount++;
-            const percent = (loadedCount / totalAssets) * 100;
-            progressFill.style.width = percent + '%';
-
+            progressFill.style.width = (loadedCount / totalAssets) * 100 + '%';
             if (loadedCount >= totalAssets && !loadingComplete) {
                 loadingComplete = true;
                 clearTimeout(timeoutId);
+                applyAssetFallbacks(failedAssets);
+                startPhase2();
+            }
+        };
+        img.onerror = () => {
+            loadedCount++;
+            failedAssets.add(src);
+            progressFill.style.width = (loadedCount / totalAssets) * 100 + '%';
+            if (loadedCount >= totalAssets && !loadingComplete) {
+                loadingComplete = true;
+                clearTimeout(timeoutId);
+                applyAssetFallbacks(failedAssets);
                 startPhase2();
             }
         };
         img.src = src;
     });
+}
+
+// Hide broken images for failed asset loads
+function applyAssetFallbacks(failedAssets) {
+    if (failedAssets.size === 0) return;
+    const titleImg = document.querySelector('.tournament-title');
+    if (failedAssets.has('assets/tournament-title.png') && titleImg) {
+        titleImg.style.display = 'none';
+    }
+    if (failedAssets.has('assets/pattern-tile.png')) {
+        splashPanel.style.backgroundImage = 'none';
+        splashPanel.style.background = '#111';
+    }
 }
 
 function startPhase2() {
@@ -56,10 +81,8 @@ function startPhase2() {
 
         setTimeout(() => {
             loadingRow.classList.add('converged');
-            // Wait for convergence transition to finish
-            loadingRow.addEventListener('transitionend', startPhase3, { once: true });
-            // Fallback if transitionend doesn't fire
-            phase3Timeout = setTimeout(startPhase3, 500);
+            // Wait for convergence transition (400ms) to finish
+            phase3Timeout = setTimeout(startPhase3, 450);
         }, 200); // bar fade duration
     }, 300); // pause at 100%
 }
