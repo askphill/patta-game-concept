@@ -20,11 +20,14 @@ const ASSETS_TO_LOAD = [
 let loadedCount = 0;
 let loadingComplete = false;
 const LOAD_TIMEOUT = 10000; // 10 seconds
+const MIN_LOAD_TIME = 2000; // minimum 2 seconds for the loading bar
 
 function preloadAssets() {
     const totalAssets = ASSETS_TO_LOAD.length;
-
     const failedAssets = new Set();
+    const loadStart = Date.now();
+    let allAssetsReady = false;
+
     const timeoutId = setTimeout(() => {
         if (!loadingComplete) {
             loadingComplete = true;
@@ -34,28 +37,59 @@ function preloadAssets() {
         }
     }, LOAD_TIMEOUT);
 
+    function onAssetDone() {
+        if (loadingComplete) return;
+
+        // Animate progress bar based on time elapsed + actual progress
+        const realProgress = loadedCount / totalAssets;
+        const timeProgress = Math.min((Date.now() - loadStart) / MIN_LOAD_TIME, 1);
+        const displayProgress = Math.min(realProgress, timeProgress) * 100;
+        progressFill.style.width = displayProgress + '%';
+
+        if (loadedCount >= totalAssets) {
+            allAssetsReady = true;
+            const elapsed = Date.now() - loadStart;
+            const remaining = Math.max(0, MIN_LOAD_TIME - elapsed);
+
+            // Smoothly fill the remaining progress over the remaining time
+            if (remaining > 0) {
+                progressFill.style.transition = `width ${remaining}ms linear`;
+                progressFill.style.width = '100%';
+            }
+
+            setTimeout(() => {
+                if (!loadingComplete) {
+                    loadingComplete = true;
+                    clearTimeout(timeoutId);
+                    applyAssetFallbacks(failedAssets);
+                    startPhase2();
+                }
+            }, remaining);
+        }
+    }
+
+    // Tick the progress bar forward even while waiting for assets
+    const tickInterval = setInterval(() => {
+        if (loadingComplete || allAssetsReady) {
+            clearInterval(tickInterval);
+            return;
+        }
+        const timeProgress = Math.min((Date.now() - loadStart) / MIN_LOAD_TIME, 1);
+        const realProgress = loadedCount / totalAssets;
+        const displayProgress = Math.min(realProgress, timeProgress) * 100;
+        progressFill.style.width = displayProgress + '%';
+    }, 50);
+
     ASSETS_TO_LOAD.forEach((src) => {
         const img = new Image();
         img.onload = () => {
             loadedCount++;
-            progressFill.style.width = (loadedCount / totalAssets) * 100 + '%';
-            if (loadedCount >= totalAssets && !loadingComplete) {
-                loadingComplete = true;
-                clearTimeout(timeoutId);
-                applyAssetFallbacks(failedAssets);
-                startPhase2();
-            }
+            onAssetDone();
         };
         img.onerror = () => {
             loadedCount++;
             failedAssets.add(src);
-            progressFill.style.width = (loadedCount / totalAssets) * 100 + '%';
-            if (loadedCount >= totalAssets && !loadingComplete) {
-                loadingComplete = true;
-                clearTimeout(timeoutId);
-                applyAssetFallbacks(failedAssets);
-                startPhase2();
-            }
+            onAssetDone();
         };
         img.src = src;
     });

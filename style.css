@@ -142,11 +142,12 @@ canvas {
     margin-bottom: 20px;
 }
 
-/* Logos in splash position: scaled up, pushed outward */
+/* Logos in splash position: scaled up, at viewport edges */
 .loading-row.splash-position {
     position: absolute;
-    width: calc(min(403px, 90vw) + 40px); /* panel width + 20px each side */
+    width: 100%;
     justify-content: space-between;
+    padding: 0 5vw;
     z-index: 2;
     gap: 0;
 }
