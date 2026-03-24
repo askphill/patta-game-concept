@@ -305,11 +305,16 @@ const KICK_FORCE = -10;
 const BALL_SIZE = 24;
 const GROUND_Y = CSS_H - 40;
 
-// Hit zone: full-width rectangle, shrinks in height toward a 4px line
-const ZONE_CENTER_Y = CSS_H * 0.455;
-const ZONE_HEIGHT_START = 550;   // starts tall (nearly full panel)
-const ZONE_HEIGHT_MIN = 4;       // shrinks to a thin line
+// Hit zone: full-width rectangle, shrinks in height toward a 6px line
+const DEBUG_HARD_MODE = false;   // SET TO true TO TEST ENDGAME DIFFICULTY
+const ZONE_CENTER_Y_BASE = CSS_H * 0.455;
+const ZONE_HEIGHT_START = DEBUG_HARD_MODE ? 6 : 550;
+const ZONE_HEIGHT_MIN = 6;       // shrinks to a thin line
 const ZONE_SHRINK_SCORE = 50;
+const ZONE_BOB_AMPLITUDE = 40;   // max vertical bob in px at smallest zone
+const ZONE_BOB_SPEED = 0.02;     // oscillation speed (radians per frame)
+let zoneBobPhase = 0;
+let ZONE_CENTER_Y = ZONE_CENTER_Y_BASE;
 
 // ── LEVEL SYSTEM ──
 const LEVELS = [
@@ -377,6 +382,8 @@ function resetGame() {
     canKick = true;
     wasGoingDown = false;
     zoneHeight = ZONE_HEIGHT_START;
+    zoneBobPhase = 0;
+    ZONE_CENTER_Y = ZONE_CENTER_Y_BASE;
     particles = [];
 }
 
@@ -387,8 +394,13 @@ function ballInZone() {
 }
 
 function updateZone() {
-    let progress = Math.min(score / ZONE_SHRINK_SCORE, 1);
+    let progress = DEBUG_HARD_MODE ? 1 : Math.min(score / ZONE_SHRINK_SCORE, 1);
     zoneHeight = ZONE_HEIGHT_START - (ZONE_HEIGHT_START - ZONE_HEIGHT_MIN) * progress;
+
+    // Bob the zone up and down — amplitude scales with shrink progress
+    zoneBobPhase += ZONE_BOB_SPEED;
+    const bobAmount = ZONE_BOB_AMPLITUDE * progress;
+    ZONE_CENTER_Y = ZONE_CENTER_Y_BASE + Math.sin(zoneBobPhase) * bobAmount;
 }
 
 // Draw an 8-bit style circle (pixelated)
