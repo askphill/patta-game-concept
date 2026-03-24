@@ -196,8 +196,14 @@ canvas.active {
     gap: 19px;
 }
 
-.loading-row.converged .logo {
+/* Only fade logos in from 0 when skipping intro (refresh) */
+#loading-overlay.skip-intro .loading-row .logo {
     opacity: 0;
+}
+
+#loading-overlay.skip-intro .loading-row.splash-position .logo-patta,
+#loading-overlay.skip-intro .loading-row.splash-position .logo-nike {
+    opacity: 1;
 }
 
 /* Phase 3: Splash panel */
@@ -396,14 +402,12 @@ canvas.active {
     width: 125px;
     height: 76px;
     transform: translateX(calc(-18vw - 138px));
-    opacity: 1;
 }
 
 .loading-row.splash-position .logo-nike {
     width: 113px;
     height: 46px;
     transform: translateX(calc(18vw + 122px));
-    opacity: 1;
 }
 
 @media (max-width: 500px) {
