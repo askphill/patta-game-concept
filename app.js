@@ -372,7 +372,7 @@ const COLORS = {
     zoneActive: 'rgba(0, 210, 211, 0.35)',
     zoneLocked: 'rgba(255, 50, 50, 0.1)',
     zoneBorderLocked: '#ff4444',
-    particle: ['#e94560', '#f9d71c', '#00d2d3', '#ff9ff3', '#54a0ff']
+    particle: ['#000000', '#ffffff', '#222222', '#dddddd', '#666666']
 };
 
 function resetGame() {
