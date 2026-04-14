@@ -6,6 +6,7 @@
     <title>Patta International Soccer Tournament</title>
     <link rel="preload" href="assets/Neue-Pixel-Grotesk.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="style.css"/>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
 <body>
     <!-- Landscape blocker (mobile only) -->
@@ -46,6 +47,25 @@
                 <button class="btn-submit-score" aria-label="Submit Score">
                     <img src="assets/btn-submit.png" alt="Submit Score" draggable="false" />
                 </button>
+            </div>
+
+            <!-- Score submission overlay -->
+            <div class="score-submit-overlay">
+                <div class="score-submit-header">YOUR SCORE</div>
+                <div class="score-submit-score"></div>
+                <form class="score-submit-form" autocomplete="off">
+                    <div class="pixel-input">
+                        <input type="text" name="name" placeholder="USERNAME" maxlength="16" required autocomplete="off" />
+                    </div>
+                    <div class="pixel-input">
+                        <input type="email" name="email" placeholder="EMAIL ADDRESS" required autocomplete="off" />
+                    </div>
+                    <div class="score-submit-error"></div>
+                    <div id="turnstile-container"></div>
+                    <button type="submit" class="btn-continue">
+                        <span>CONTINUE</span>
+                    </button>
+                </form>
             </div>
 
             <img src="assets/tournament-title.png" alt="International Patta Soccer Tournament" class="tournament-title" />

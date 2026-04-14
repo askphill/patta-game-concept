@@ -579,3 +579,118 @@ canvas.active {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+/* ── SCORE SUBMISSION OVERLAY ── */
+.score-submit-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 4;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s var(--ease-out-cubic);
+    background: linear-gradient(to bottom, rgba(219, 109, 42, 0) 60%, rgba(219, 109, 42, 0.6) 100%);
+}
+
+.splash-panel.score-submit-active .score-submit-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.score-submit-header {
+    font-family: 'Neue Pixel Grotesk', monospace;
+    font-size: 21px;
+    color: #e9e9e9;
+    text-transform: uppercase;
+    letter-spacing: 2.1px;
+    margin-top: 21px;
+}
+
+.score-submit-score {
+    font-family: 'Neue Pixel Grotesk', monospace;
+    font-size: 120px;
+    color: #fff;
+    line-height: 1;
+    margin-top: 56px;
+}
+
+.score-submit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: calc(100% - 36px);
+    padding: 18px;
+    margin-top: auto;
+    margin-bottom: 36px;
+}
+
+.pixel-input {
+    height: 48px;
+    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+}
+
+.pixel-input input {
+    width: 100%;
+    height: 100%;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-family: 'Neue Pixel Grotesk', monospace;
+    font-size: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 12px;
+}
+
+.pixel-input input::placeholder {
+    color: #8ac464;
+}
+
+.score-submit-error {
+    font-family: 'Neue Pixel Grotesk', monospace;
+    font-size: 14px;
+    color: #ff4444;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    min-height: 14px;
+}
+
+.btn-continue {
+    height: 57px;
+    border: 2px solid #fff;
+    background: linear-gradient(to bottom, #0051e8, #40c4f1);
+    color: #fff;
+    font-family: 'Neue Pixel Grotesk', monospace;
+    font-size: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: filter 0.15s var(--ease-out-cubic), transform 0.15s var(--ease-out-cubic);
+    margin: 0 auto;
+    padding: 0 40px;
+}
+
+.btn-continue:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-continue:not(:disabled):hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.btn-continue:not(:disabled):active {
+    filter: brightness(0.92);
+    transform: translateY(1px);
+    transition-duration: 0.1s;
+}
+
+#turnstile-container {
+    min-height: 0;
+}
