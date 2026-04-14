@@ -1,0 +1,11 @@
+{
+  "framework": null,
+  "headers": [
+    {
+      "source": "/api/leaderboard",
+      "headers": [
+        { "key": "Cache-Control", "value": "s-maxage=30, stale-while-revalidate=60" }
+      ]
+    }
+  ]
+}

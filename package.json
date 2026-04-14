@@ -1,0 +1,7 @@
+{
+  "name": "patta-game-concept",
+  "private": true,
+  "dependencies": {
+    "@vercel/kv": "^2.0.0"
+  }
+}
