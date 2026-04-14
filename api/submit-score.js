@@ -1,7 +1,5 @@
-import { Redis } from '@upstash/redis';
+import { redis } from '../lib/redis.js';
 import { getTopTen } from '../lib/leaderboard.js';
-
-const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
