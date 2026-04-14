@@ -39,6 +39,167 @@ const gameOverOverlay = document.querySelector('.game-over-overlay');
 const gameOverScore = document.querySelector('.game-over-score');
 const btnSubmitScore = document.querySelector('.btn-submit-score');
 
+// ── LEADERBOARD & SUBMISSION ──
+// Replace with your Cloudflare Turnstile site key
+const TURNSTILE_SITE_KEY = 'YOUR_TURNSTILE_SITE_KEY';
+
+const scoreSubmitOverlay = document.querySelector('.score-submit-overlay');
+const scoreSubmitScore = document.querySelector('.score-submit-score');
+const scoreSubmitForm = document.querySelector('.score-submit-form');
+const scoreSubmitError = document.querySelector('.score-submit-error');
+const btnContinue = document.querySelector('.btn-continue');
+const leaderboardOverlay = document.querySelector('.leaderboard-overlay');
+const leaderboardRows = document.querySelector('.leaderboard-rows');
+const btnBack = document.querySelector('.btn-back');
+const btnLeaderboard = document.querySelector('.btn-leaderboard');
+
+let currentSessionId = null;
+let turnstileToken = null;
+let turnstileWidgetId = null;
+
+async function startSession() {
+  try {
+    const res = await fetch('/api/start-session', { method: 'POST' });
+    const data = await res.json();
+    currentSessionId = data.sessionId;
+  } catch (e) {
+    currentSessionId = null;
+  }
+}
+
+function showScoreSubmit() {
+  scoreSubmitScore.textContent = score;
+  scoreSubmitError.textContent = '';
+  btnContinue.disabled = false;
+
+  // Pre-fill from localStorage
+  const savedName = localStorage.getItem('patta_game_name');
+  const savedEmail = localStorage.getItem('patta_game_email');
+  const nameInput = scoreSubmitForm.querySelector('[name="name"]');
+  const emailInput = scoreSubmitForm.querySelector('[name="email"]');
+  if (savedName) nameInput.value = savedName;
+  if (savedEmail) emailInput.value = savedEmail;
+
+  splashPanel.classList.remove('game-over');
+  splashPanel.classList.add('score-submit-active');
+
+  // Initialize Turnstile widget
+  if (window.turnstile && !turnstileWidgetId) {
+    turnstileWidgetId = turnstile.render('#turnstile-container', {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: function(token) {
+        turnstileToken = token;
+      },
+      'error-callback': function() {
+        turnstileToken = null;
+      },
+      size: 'invisible',
+    });
+  } else if (window.turnstile && turnstileWidgetId) {
+    turnstile.reset(turnstileWidgetId);
+    turnstileToken = null;
+  }
+}
+
+scoreSubmitForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  scoreSubmitError.textContent = '';
+  btnContinue.disabled = true;
+
+  const formData = new FormData(scoreSubmitForm);
+  const name = (formData.get('name') || '').trim();
+  const email = (formData.get('email') || '').trim();
+
+  // Client-side validation
+  if (!name || name.length > 16) {
+    scoreSubmitError.textContent = 'NAME MUST BE 1-16 CHARACTERS';
+    btnContinue.disabled = false;
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    scoreSubmitError.textContent = 'INVALID EMAIL ADDRESS';
+    btnContinue.disabled = false;
+    return;
+  }
+
+  // Save to localStorage for pre-fill
+  localStorage.setItem('patta_game_name', name);
+  localStorage.setItem('patta_game_email', email);
+
+  try {
+    const res = await fetch('/api/submit-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        email,
+        score,
+        sessionId: currentSessionId,
+        turnstileToken,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      scoreSubmitError.textContent = (data.error || 'SUBMISSION FAILED').toUpperCase();
+      btnContinue.disabled = false;
+      return;
+    }
+
+    // Show leaderboard with user highlight
+    showLeaderboard(data.topTen, data.userEntry);
+  } catch (err) {
+    scoreSubmitError.textContent = 'NETWORK ERROR. TRY AGAIN.';
+    btnContinue.disabled = false;
+  }
+});
+
+function showLeaderboard(topTen, userEntry) {
+  splashPanel.classList.remove('score-submit-active', 'game-over', 'game-active', 'game-playing');
+  canvas.classList.remove('active');
+  splashPanel.classList.add('leaderboard-active');
+  renderLeaderboard(topTen, userEntry);
+}
+
+function renderLeaderboard(topTen, userEntry) {
+  leaderboardRows.innerHTML = '';
+
+  topTen.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'leaderboard-row';
+    if (userEntry && entry.rank === userEntry.rank) {
+      row.classList.add('user-row');
+    }
+    row.innerHTML =
+      '<span class="lb-col-rank">' + entry.rank + '</span>' +
+      '<span class="lb-col-name">' + escapeHtml(entry.name) + '</span>' +
+      '<span class="lb-col-score">' + entry.score + '</span>';
+    leaderboardRows.appendChild(row);
+  });
+
+  // If user is outside top 10, add separator + user row
+  if (userEntry && userEntry.rank > topTen.length) {
+    const sep = document.createElement('div');
+    sep.className = 'leaderboard-row separator-row';
+    leaderboardRows.appendChild(sep);
+
+    const userRow = document.createElement('div');
+    userRow.className = 'leaderboard-row user-row';
+    userRow.innerHTML =
+      '<span class="lb-col-rank">' + userEntry.rank + '</span>' +
+      '<span class="lb-col-name">' + escapeHtml(userEntry.name) + '</span>' +
+      '<span class="lb-col-score">' + userEntry.score + '</span>';
+    leaderboardRows.appendChild(userRow);
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 const ASSETS_TO_LOAD = [
     'assets/patta-logo.png',
     'assets/nike-swoosh.png',
@@ -249,6 +410,7 @@ function hideGameOver() {
 }
 
 function startGame() {
+    startSession();
     // Show canvas + start overlay inside the panel, hide menu content
     splashPanel.classList.add('game-active');
     canvas.classList.add('active');
@@ -270,10 +432,10 @@ document.querySelectorAll('.menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => e.stopPropagation());
 });
 
-// Submit score button
+// Submit score button → show submission form
 btnSubmitScore.addEventListener('click', (e) => {
     e.stopPropagation();
-    // TODO: implement score submission
+    showScoreSubmit();
 });
 
 function backToMenu() {
@@ -283,6 +445,27 @@ function backToMenu() {
     state = 'start';
     resetGame();
 }
+
+// Back button → return to menu
+btnBack.addEventListener('click', (e) => {
+  e.stopPropagation();
+  splashPanel.classList.remove('leaderboard-active');
+  state = 'start';
+  resetGame();
+});
+
+// Menu leaderboard button → fetch and show leaderboard (no user highlight)
+btnLeaderboard.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  try {
+    const res = await fetch('/api/leaderboard');
+    const data = await res.json();
+    splashPanel.classList.add('leaderboard-active');
+    renderLeaderboard(data.topTen, null);
+  } catch (err) {
+    // Silently fail — button just doesn't work if API is down
+  }
+});
 
 document.addEventListener('keydown', (e) => {
     // Enter = Play Game (from menu) or Submit Score (game over)
@@ -511,17 +694,7 @@ function kick() {
     }
 
     if (state === 'over') {
-        if (Date.now() - gameOverTime < GAME_OVER_COOLDOWN) return;
-        hideGameOver();
-        state = 'playing';
-        resetGame();
-        ball.vy = KICK_FORCE;
-        ball.vx = (Math.random() - 0.5) * 4;
-        ball.spin = ball.vx * 0.08;
-        score = 1;
-        canKick = false;
-        screenShake = 4;
-        spawnParticles(ball.x, ball.y);
+        // Don't auto-restart — user must go through submit flow
         return;
     }
 }

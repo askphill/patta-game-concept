@@ -244,13 +244,20 @@ canvas.active {
 /* Game active: hide menu content, show canvas */
 .splash-panel.game-active .tournament-title,
 .splash-panel.game-active .menu-buttons,
-.splash-panel.game-active .menu-footer {
+.splash-panel.game-active .menu-footer,
+.splash-panel.score-submit-active .tournament-title,
+.splash-panel.score-submit-active .menu-buttons,
+.splash-panel.score-submit-active .menu-footer,
+.splash-panel.leaderboard-active .menu-buttons,
+.splash-panel.leaderboard-active .menu-footer {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s var(--ease-out-cubic);
 }
 
-.splash-panel.game-active::before {
+.splash-panel.game-active::before,
+.splash-panel.score-submit-active::before,
+.splash-panel.leaderboard-active::before {
     opacity: 0;
     transition: opacity 0.3s var(--ease-out-cubic);
 }
