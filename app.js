@@ -599,8 +599,9 @@ const GROUND_Y = CSS_H - 40;
 const DEBUG_HARD_MODE = false; // SET TO true TO TEST ENDGAME DIFFICULTY
 const ZONE_CENTER_Y_BASE = CSS_H * 0.455;
 const ZONE_HEIGHT_START = DEBUG_HARD_MODE ? 10 : 400;
-const ZONE_HEIGHT_MIN = 24;
+const ZONE_HEIGHT_FLOOR = 40; // initial shrink target
 const ZONE_SHRINK_SCORE = 100;
+const ZONE_ENDLESS_SHRINK = 0.15; // px per point after ZONE_SHRINK_SCORE
 const ZONE_BOB_AMPLITUDE = 60; // max vertical bob in px at smallest zone
 const ZONE_BOB_SPEED_BASE = 0.02; // base oscillation speed (same as original)
 const ZONE_BOB_SPEED_PER_LEVEL = 0.003; // gentle increase per level
@@ -617,19 +618,19 @@ const LEVELS = [
   },
   {
     name: "LOCAL STADIUM",
-    threshold: 20,
+    threshold: 30,
     bgSrc: "assets/bg-level2.jpg",
     bgImg: null,
   },
   {
     name: "BIG STADIUM",
-    threshold: 40,
+    threshold: 70,
     bgSrc: "assets/bg-level3.jpg",
     bgImg: null,
   },
   {
     name: "WORLD CUP",
-    threshold: 60,
+    threshold: 120,
     bgSrc: "assets/bg-level4.jpg",
     bgImg: null,
   },
@@ -707,8 +708,10 @@ function ballInZone() {
 function updateZone(zoneDt) {
   zoneDt = zoneDt || 1;
   let progress = DEBUG_HARD_MODE ? 1 : Math.min(score / ZONE_SHRINK_SCORE, 1);
-  zoneHeight =
-    ZONE_HEIGHT_START - (ZONE_HEIGHT_START - ZONE_HEIGHT_MIN) * progress;
+  var baseHeight = ZONE_HEIGHT_START - (ZONE_HEIGHT_START - ZONE_HEIGHT_FLOOR) * progress;
+  // Keep shrinking slowly past score 100 — no plateau
+  var endlessShrink = score > ZONE_SHRINK_SCORE ? (score - ZONE_SHRINK_SCORE) * ZONE_ENDLESS_SHRINK : 0;
+  zoneHeight = Math.max(4, baseHeight - endlessShrink);
 
   // Bob the zone — speed increases per level + gradual creep after score 80
   var extraSpeed = score > 60 ? (score - 60) * 0.0003 : 0;
