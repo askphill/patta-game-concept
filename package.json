@@ -2,7 +2,7 @@
   "name": "patta-game-concept",
   "private": true,
   "scripts": {
-    "build": "npx terser app.js -o app.min.js -c -m && mv app.min.js app.js"
+    "vercel-build": "if [ \"$VERCEL\" = \"1\" ]; then npx terser app.js -o app.min.js -c -m && mv app.min.js app.js; fi"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.0",

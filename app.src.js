@@ -60,15 +60,6 @@ let currentSessionId = null;
 let turnstileToken = null;
 let turnstileWidgetId = null;
 
-function signPayload(name, email, val, sid) {
-  var key = sid + ":" + val + ":" + name.length;
-  var hash = 0;
-  for (var i = 0; i < key.length; i++) {
-    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
-  }
-  return hash.toString(36);
-}
-
 async function startSession() {
   try {
     const res = await fetch("/api/start-session", { method: "POST" });
@@ -103,10 +94,6 @@ function showScoreSubmit() {
 }
 
 // Clear error when user edits the form
-scoreSubmitForm.addEventListener("input", () => {
-  scoreSubmitError.textContent = "";
-});
-
 scoreSubmitForm.addEventListener("input", () => {
   scoreSubmitError.textContent = "";
 });
@@ -151,8 +138,7 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
       body: JSON.stringify({
         name,
         email,
-        _v: score,
-        _s: signPayload(name, email, score, currentSessionId),
+        score,
         sessionId: currentSessionId,
         turnstileToken,
       }),
@@ -789,7 +775,7 @@ function kick() {
     resetGame();
     // First kick is free — in hard mode start ball at zone center
     if (DEBUG_HARD_MODE) ball.y = ZONE_CENTER_Y_BASE;
-    ball.vy = KICK_FORCE * 1.7;
+    ball.vy = KICK_FORCE;
     ball.vx = (Math.random() - 0.5) * 4;
     ball.spin = ball.vx * 0.08;
     score = 1;
@@ -814,7 +800,7 @@ function kick() {
       return;
     }
 
-    ball.vy = KICK_FORCE * 1.7;
+    ball.vy = KICK_FORCE;
     ball.vx = (Math.random() - 0.5) * 4;
     ball.spin = ball.vx * 0.08;
     score++;
@@ -936,7 +922,7 @@ function drawLevelTransition() {
     levelTransition = false;
     levelTransTimer = 0;
     // Resume with a free kick
-    ball.vy = KICK_FORCE * 1.7;
+    ball.vy = KICK_FORCE;
     ball.vx = (Math.random() - 0.5) * 3;
     ball.spin = ball.vx * 0.08;
     canKick = false;
