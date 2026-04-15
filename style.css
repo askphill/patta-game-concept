@@ -347,12 +347,18 @@ canvas.active {
 .splash-panel::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -112px;
   background-image: url("assets/pattern-tile.png");
   background-size: 112px;
   background-repeat: repeat;
   opacity: 0.14;
   pointer-events: none;
+  animation: pattern-drift 20s linear infinite;
+}
+
+@keyframes pattern-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(112px, 112px); }
 }
 
 .splash-panel.visible {
@@ -446,7 +452,7 @@ canvas.active {
 }
 
 .btn-submit-score {
-  width: 263px;
+  width: 170px;
   padding: 0;
   border: none;
   background: none;
@@ -602,6 +608,7 @@ canvas.active {
   background: none;
   cursor: pointer;
   opacity: 0;
+  pointer-events: none;
   transform: translateY(20px);
   transition:
     opacity 0.3s var(--ease-out-cubic),
@@ -619,6 +626,7 @@ canvas.active {
 
 .menu-btn.visible {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0) scale(1);
   filter: brightness(1);
   transition:
@@ -833,6 +841,7 @@ canvas.active {
 .pixel-input {
   height: 48px;
   border: 2px solid #fff;
+  border-radius: 4px;
   display: flex;
   align-items: center;
 }
@@ -865,20 +874,24 @@ canvas.active {
 }
 
 .btn-continue {
-  height: 57px;
-  border: 2px solid #fff;
-  background: linear-gradient(to bottom, #0051e8, #40c4f1);
-  color: #fff;
-  font-family: "Neue Pixel Grotesk", monospace;
-  font-size: 20px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  width: 160px;
+  padding: 0;
+  border: none;
+  background: none;
   cursor: pointer;
+  margin: 0 auto;
+  display: block;
   transition:
     filter 0.15s var(--ease-out-cubic),
     transform 0.15s var(--ease-out-cubic);
-  margin: 0 auto;
-  padding: 0 40px;
+}
+
+.btn-continue img {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .btn-continue:disabled {
@@ -957,8 +970,8 @@ canvas.active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 38px;
-  margin-bottom: 32px;
+  padding-top: 7.2%;
+  margin-bottom: 16px;
   gap: 2px;
   z-index: 2;
 }
@@ -1017,6 +1030,7 @@ canvas.active {
 .leaderboard-rows {
   width: calc(100% - 36px);
   min-height: 300px;
+  margin-top: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

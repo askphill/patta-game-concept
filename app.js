@@ -209,7 +209,7 @@ function renderLeaderboard(topTen, userEntry) {
   topTen.forEach(function(entry) {
     var row = document.createElement("div");
     row.className = "leaderboard-row";
-    var isUser = userEntry && entry.rank === userEntry.rank;
+    var isUser = userEntry && entry.name === userEntry.name;
     if (isUser) {
       row.classList.add("user-row");
     }
@@ -218,7 +218,8 @@ function renderLeaderboard(topTen, userEntry) {
   });
 
   // If user is outside top 10, add separator + user row
-  if (userEntry && userEntry.rank > topTen.length) {
+  var userInTopTen = userEntry && topTen.some(function(e) { return e.name === userEntry.name; });
+  if (userEntry && !userInTopTen) {
     var sep = document.createElement("div");
     sep.className = "leaderboard-row separator-row";
     leaderboardRows.appendChild(sep);
@@ -1121,6 +1122,25 @@ function update(timestamp) {
 
   ctx.restore();
   rafId = requestAnimationFrame(update);
+}
+
+// ── LOGO PARALLAX (desktop only) ──
+if (window.matchMedia('(pointer: fine)').matches) {
+  var logoPatta = document.querySelector('.loading-row .logo-patta');
+  var logoNike = document.querySelector('.loading-row .logo-nike');
+  document.addEventListener('mousemove', function(e) {
+    var cx = (e.clientX / window.innerWidth - 0.5) * 2;  // -1 to 1
+    var cy = (e.clientY / window.innerHeight - 0.5) * 2;  // -1 to 1
+    var pattaX = cx * -8;
+    var pattaY = cy * -5;
+    var nikeX = cx * 8;
+    var nikeY = cy * 5;
+    // Only apply if logos are in splash position (visible on sides)
+    if (loadingRow.classList.contains('splash-position')) {
+      logoPatta.style.translate = pattaX + 'px ' + pattaY + 'px';
+      logoNike.style.translate = nikeX + 'px ' + nikeY + 'px';
+    }
+  });
 }
 
 // Game loop is started by the loading overlay when "Play Game" is clicked
