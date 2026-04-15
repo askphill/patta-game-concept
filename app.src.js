@@ -773,9 +773,9 @@ function kick() {
     state = "playing";
     splashPanel.classList.add("game-playing");
     resetGame();
-    // First kick is free — in hard mode start ball at zone center
+    // First kick is free and goes higher
     if (DEBUG_HARD_MODE) ball.y = ZONE_CENTER_Y_BASE;
-    ball.vy = KICK_FORCE;
+    ball.vy = KICK_FORCE * 1.7;
     ball.vx = (Math.random() - 0.5) * 4;
     ball.spin = ball.vx * 0.08;
     score = 1;
