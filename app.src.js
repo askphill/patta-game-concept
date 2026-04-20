@@ -641,13 +641,13 @@ const LEVELS = [
   },
   {
     name: "LOCAL STADIUM",
-    threshold: 20,
+    threshold: 30,
     bgSrc: "assets/bg-level2.jpg",
     bgImg: null,
   },
   {
     name: "BIG STADIUM",
-    threshold: 70,
+    threshold: 60,
     bgSrc: "assets/bg-level3.jpg",
     bgImg: null,
   },
@@ -778,7 +778,7 @@ function updateZone(zoneDt) {
   var baseHeight = ZONE_HEIGHT_START - (ZONE_HEIGHT_START - ZONE_HEIGHT_FLOOR) * progress;
   // Keep shrinking slowly past score 100 — no plateau
   var endlessShrink = baseScore > ZONE_SHRINK_SCORE ? (baseScore - ZONE_SHRINK_SCORE) * ZONE_ENDLESS_SHRINK : 0;
-  zoneHeight = Math.max(4, baseHeight - endlessShrink);
+  zoneHeight = Math.max(6, baseHeight - endlessShrink);
 
   // Bob the zone — speed increases per level + gradual creep after score 60
   var extraSpeed = baseScore > 60 ? (baseScore - 60) * 0.0003 : 0;
@@ -1087,7 +1087,7 @@ function drawLevelTransition() {
 const marqueeImg = new Image();
 marqueeImg.src = "assets/patta-nike-marquee.png";
 const MARQUEE_H = 56;
-const MARQUEE_Y = CSS_H * 0.55 - 2;
+const MARQUEE_Y = CSS_H * 0.7;
 let marqueeX = 0;
 
 function drawMarquee(marqueeDt) {
