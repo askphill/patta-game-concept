@@ -738,6 +738,8 @@ function resetGame() {
   zoneBobPhase = 0;
   ZONE_CENTER_Y = ZONE_CENTER_Y_BASE;
   particles = [];
+  sweetStreak = 0;
+  sweetText = { active: false, x: 0, y: 0, alpha: 0, scale: 1, text: '' };
   bonusLogo.active = false;
   bonusText.active = false;
   lastBonusKick = 0;
@@ -846,6 +848,19 @@ function kick() {
       spawnBonusParticles(ball.x, ball.y);
     }
 
+    // Check sweet spot hit
+    var ssP = Math.min(baseScore / ZONE_SHRINK_SCORE, 1);
+    var ssH = Math.max(SWEET_SPOT_MIN, SWEET_SPOT_START - (SWEET_SPOT_START - SWEET_SPOT_MIN) * ssP);
+    var sweetTop = ZONE_CENTER_Y - ssH / 2;
+    var sweetBottom = ZONE_CENTER_Y + ssH / 2;
+    if (ball.y >= sweetTop && ball.y <= sweetBottom) {
+      sweetStreak++;
+      bonusScore += sweetStreak;
+      sweetText = { active: true, x: ball.x, y: ball.y - 30, alpha: 1, scale: 1, text: '+' + sweetStreak };
+    } else {
+      sweetStreak = 0;
+    }
+
     ball.vy = KICK_FORCE;
     ball.vx = (Math.random() - 0.5) * 4;
     ball.spin = ball.vx * 0.08;
@@ -914,6 +929,12 @@ canvas.addEventListener("mousedown", function (e) {
 // Draw the hit zone (full-width rectangle, shrinks to 4px line)
 let zonePulseTimer = 0;
 
+// Sweet spot — 10px strip in center of zone
+const SWEET_SPOT_START = 30;
+const SWEET_SPOT_MIN = 10;
+let sweetStreak = 0;
+let sweetText = { active: false, x: 0, y: 0, alpha: 0, scale: 1, text: '' };
+
 function drawZone() {
   const zoneTop = ZONE_CENTER_Y - zoneHeight / 2;
 
@@ -939,6 +960,22 @@ function drawZone() {
   ctx.lineTo(CSS_W, zoneTop);
   ctx.moveTo(0, zoneTop + zoneHeight);
   ctx.lineTo(CSS_W, zoneTop + zoneHeight);
+  ctx.stroke();
+
+  // Sweet spot strip — shrinks with zone
+  var ssProgress = DEBUG_HARD_MODE ? 1 : Math.min(baseScore / ZONE_SHRINK_SCORE, 1);
+  var ssHeight = Math.max(SWEET_SPOT_MIN, SWEET_SPOT_START - (SWEET_SPOT_START - SWEET_SPOT_MIN) * ssProgress);
+  var ssTop = ZONE_CENTER_Y - ssHeight / 2;
+  var ssAlpha = 0.35 + (sweetStreak > 0 ? Math.sin(Date.now() * 0.008) * 0.15 : 0);
+  ctx.fillStyle = "rgba(0, 220, 0, " + ssAlpha + ")";
+  ctx.fillRect(0, ssTop, CSS_W, ssHeight);
+  ctx.strokeStyle = "rgba(0, 255, 100, 0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, ssTop);
+  ctx.lineTo(CSS_W, ssTop);
+  ctx.moveTo(0, ssTop + ssHeight);
+  ctx.lineTo(CSS_W, ssTop + ssHeight);
   ctx.stroke();
 }
 
@@ -1160,6 +1197,33 @@ function drawBonusText() {
   ctx.restore();
 }
 
+// ── SWEET SPOT TEXT ──
+function updateSweetText(dt) {
+  if (!sweetText.active) return;
+  sweetText.alpha -= 0.025 * dt;
+  sweetText.scale += 0.01 * dt;
+  sweetText.y -= 0.8 * dt;
+  if (sweetText.alpha <= 0) sweetText.active = false;
+}
+
+function drawSweetText() {
+  if (!sweetText.active) return;
+  ctx.save();
+  ctx.globalAlpha = sweetText.alpha;
+  ctx.translate(sweetText.x, sweetText.y);
+  ctx.scale(sweetText.scale, sweetText.scale);
+  ctx.font = "22px 'Neue Pixel Grotesk', monospace";
+  ctx.fillStyle = "#00ff88";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(sweetText.text, 0, 0);
+  if (sweetStreak >= 3) {
+    ctx.font = "12px 'Neue Pixel Grotesk', monospace";
+    ctx.fillText(sweetStreak + "x STREAK", 0, 16);
+  }
+  ctx.restore();
+}
+
 // Main game loop
 let rafId = null;
 let lastFrameTime = 0;
@@ -1292,6 +1356,10 @@ function update(timestamp) {
     // Bonus +10 text (drawn on top)
     updateBonusText(dt);
     drawBonusText();
+
+    // Sweet spot text
+    updateSweetText(dt);
+    drawSweetText();
 
     // Score — bottom-left, 63px white, pulses on bonus hit
     if (scorePulse > 0) {

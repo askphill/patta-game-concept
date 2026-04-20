@@ -139,10 +139,10 @@ function validateInputs(name, email, score, baseScore) {
   if (!email || typeof email !== 'string') return 'Email is required';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Invalid email format';
 
-  if (!Number.isInteger(score) || score < 1 || score > 500) return 'Invalid score';
+  if (!Number.isInteger(score) || score < 1 || score > 2000) return 'Invalid score';
 
-  // Bonus can't exceed max possible (4 bonuses × 10)
-  if (baseScore && score - baseScore > 80) return 'Invalid score';
+  // Bonus can't exceed baseScore * 3 (sweet spot streaks + logo bonuses)
+  if (baseScore && score - baseScore > baseScore * 3) return 'Invalid score';
 
   return null;
 }
