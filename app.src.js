@@ -705,6 +705,11 @@ let lastBonusKick = 0; // track when last UNITE bonus spawned
 let scorePulse = 0; // pulse timer for score animation on bonus hit
 let nextUniteKick = 15 + Math.floor(Math.random() * 11); // first UNITE at 15-25 kicks
 
+// Wind system
+let wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
+let nextWindKick = 30 + Math.floor(Math.random() * 21); // first wind at 25-40 kicks
+var windParticles = [];
+
 // Hit zone (rectangular)
 let zoneHeight = ZONE_HEIGHT_START;
 
@@ -744,6 +749,9 @@ function resetGame() {
   bonusText.active = false;
   lastBonusKick = 0;
   nextUniteKick = 15 + Math.floor(Math.random() * 11);
+  wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
+  nextWindKick = 30 + Math.floor(Math.random() * 21);
+  windParticles = [];
   zonePulseTimer = 0;
 }
 
@@ -888,6 +896,13 @@ function kick() {
       var bonusY = ZONE_CENTER_Y + (Math.random() - 0.5) * yRange - BONUS_LOGO_H / 2;
       bonusLogo = { active: true, x: dir === 1 ? -BONUS_LOGO_W : CSS_W, y: bonusY, alpha: 0, type: 'unite', dir: dir, speed: 1.5, points: 5 };
       nextUniteKick = baseScore + 15 + Math.floor(Math.random() * 11);
+    }
+
+    // Wind trigger — not during bonus
+    if (!wind.active && !wind.warningTimer && !bonusLogo.active && baseScore >= nextWindKick) {
+      wind.dir = Math.random() > 0.5 ? 1 : -1;
+      wind.warningTimer = 60; // ~1 second warning
+      wind.force = 0.15 + Math.random() * 0.1;
     }
 
     // Check for level up
@@ -1197,6 +1212,85 @@ function drawBonusText() {
   ctx.restore();
 }
 
+// ── WIND SYSTEM ──
+function updateWind(dt) {
+  // Warning phase — arrow indicator
+  if (wind.warningTimer > 0) {
+    wind.warningTimer -= dt;
+    if (wind.warningTimer <= 0) {
+      // Start the actual wind
+      wind.active = true;
+      wind.timer = 120; // ~2 seconds of wind
+      nextWindKick = baseScore + 30 + Math.floor(Math.random() * 21);
+    }
+    return;
+  }
+
+  if (!wind.active) return;
+
+  wind.timer -= dt;
+
+  // Apply force to ball
+  ball.vx += wind.dir * wind.force * dt;
+
+  // Spawn wind line particles
+  for (var wi = 0; wi < 2; wi++) {
+    if (Math.random() < 0.6 * dt) {
+      var startX = wind.dir === 1 ? -10 : CSS_W + 10;
+      var py = Math.random() * CSS_H;
+      windParticles.push({
+        x: startX, y: py,
+        vx: wind.dir * (10 + Math.random() * 6),
+        life: 50 + Math.random() * 30,
+        len: 25 + Math.random() * 30,
+      });
+    }
+  }
+
+  if (wind.timer <= 0) {
+    wind.active = false;
+  }
+}
+
+function updateWindParticles(dt) {
+  for (var i = windParticles.length - 1; i >= 0; i--) {
+    var p = windParticles[i];
+    p.x += p.vx * dt;
+    p.life -= dt;
+    if (p.life <= 0) windParticles.splice(i, 1);
+  }
+}
+
+function drawWind() {
+  // Draw warning arrow
+  if (wind.warningTimer > 0) {
+    var blink = Math.sin(wind.warningTimer * 0.3) > 0;
+    if (blink) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.font = "36px 'Neue Pixel Grotesk', monospace";
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      var arrow = wind.dir === 1 ? ">>>" : "<<<";
+      ctx.fillText(arrow, CSS_W / 2, ZONE_CENTER_Y_BASE);
+      ctx.restore();
+    }
+  }
+
+  // Draw wind line particles
+  ctx.lineWidth = 3;
+  for (var i = 0; i < windParticles.length; i++) {
+    var p = windParticles[i];
+    var alpha = Math.min(p.life / 15, 1) * 0.7;
+    ctx.strokeStyle = "rgba(255, 255, 255, " + alpha + ")";
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - p.vx * 0.5, p.y);
+    ctx.stroke();
+  }
+}
+
 // ── SWEET SPOT TEXT ──
 function updateSweetText(dt) {
   if (!sweetText.active) return;
@@ -1344,6 +1438,11 @@ function update(timestamp) {
         ctx.globalAlpha = 1;
       }
     }
+
+    // Wind
+    updateWind(dt);
+    updateWindParticles(dt);
+    drawWind();
 
     // Bonus logo (drawn behind ball)
     updateBonusLogo(dt);
