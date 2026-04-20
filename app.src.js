@@ -641,13 +641,13 @@ const LEVELS = [
   },
   {
     name: "LOCAL STADIUM",
-    threshold: 20,
+    threshold: 30,
     bgSrc: "assets/bg-level2.jpg",
     bgImg: null,
   },
   {
     name: "BIG STADIUM",
-    threshold: 70,
+    threshold: 60,
     bgSrc: "assets/bg-level3.jpg",
     bgImg: null,
   },
@@ -705,6 +705,18 @@ let lastBonusKick = 0; // track when last UNITE bonus spawned
 let scorePulse = 0; // pulse timer for score animation on bonus hit
 let nextUniteKick = 15 + Math.floor(Math.random() * 11); // first UNITE at 15-25 kicks
 
+// Wind system
+let wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
+let nextWindKick = 30 + Math.floor(Math.random() * 21); // first wind at 25-40 kicks
+var windParticles = [];
+
+// Storm system (rain + thunder) — rare, 1-2 per game
+let storm = { active: false, timer: 0, flashTimer: 0, flashAlpha: 0 };
+// Storm spawns once per level at a random point
+var nextStormKick = 35 + Math.floor(Math.random() * 15); // first storm in level 1, never before kick 10
+var stormsThisLevel = 0;
+var rainDrops = [];
+
 // Hit zone (rectangular)
 let zoneHeight = ZONE_HEIGHT_START;
 
@@ -738,10 +750,19 @@ function resetGame() {
   zoneBobPhase = 0;
   ZONE_CENTER_Y = ZONE_CENTER_Y_BASE;
   particles = [];
+  sweetStreak = 0;
+  sweetText = { active: false, x: 0, y: 0, alpha: 0, scale: 1, text: '' };
   bonusLogo.active = false;
   bonusText.active = false;
   lastBonusKick = 0;
   nextUniteKick = 15 + Math.floor(Math.random() * 11);
+  wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
+  nextWindKick = 30 + Math.floor(Math.random() * 21);
+  windParticles = [];
+  storm = { active: false, timer: 0, flashTimer: 0, flashAlpha: 0 };
+  nextStormKick = 35 + Math.floor(Math.random() * 15);
+  stormsThisLevel = 0;
+  rainDrops = [];
   zonePulseTimer = 0;
 }
 
@@ -757,7 +778,7 @@ function updateZone(zoneDt) {
   var baseHeight = ZONE_HEIGHT_START - (ZONE_HEIGHT_START - ZONE_HEIGHT_FLOOR) * progress;
   // Keep shrinking slowly past score 100 — no plateau
   var endlessShrink = baseScore > ZONE_SHRINK_SCORE ? (baseScore - ZONE_SHRINK_SCORE) * ZONE_ENDLESS_SHRINK : 0;
-  zoneHeight = Math.max(4, baseHeight - endlessShrink);
+  zoneHeight = Math.max(6, baseHeight - endlessShrink);
 
   // Bob the zone — speed increases per level + gradual creep after score 60
   var extraSpeed = baseScore > 60 ? (baseScore - 60) * 0.0003 : 0;
@@ -846,6 +867,19 @@ function kick() {
       spawnBonusParticles(ball.x, ball.y);
     }
 
+    // Check sweet spot hit
+    var ssP = Math.min(baseScore / ZONE_SHRINK_SCORE, 1);
+    var ssH = Math.max(SWEET_SPOT_MIN, SWEET_SPOT_START - (SWEET_SPOT_START - SWEET_SPOT_MIN) * ssP);
+    var sweetTop = ZONE_CENTER_Y - ssH / 2;
+    var sweetBottom = ZONE_CENTER_Y + ssH / 2;
+    if (ball.y >= sweetTop && ball.y <= sweetBottom) {
+      sweetStreak++;
+      bonusScore += sweetStreak;
+      sweetText = { active: true, x: ball.x, y: ball.y - 30, alpha: 1, scale: 1, text: '+' + sweetStreak };
+    } else {
+      sweetStreak = 0;
+    }
+
     ball.vy = KICK_FORCE;
     ball.vx = (Math.random() - 0.5) * 4;
     ball.spin = ball.vx * 0.08;
@@ -875,11 +909,30 @@ function kick() {
       nextUniteKick = baseScore + 15 + Math.floor(Math.random() * 11);
     }
 
+    // Wind trigger — not during bonus or storm
+    if (!wind.active && !wind.warningTimer && !bonusLogo.active && !storm.active && baseScore >= nextWindKick) {
+      wind.dir = Math.random() > 0.5 ? 1 : -1;
+      wind.warningTimer = 60; // ~1 second warning
+      wind.force = 0.15 + Math.random() * 0.1;
+    }
+
+    // Storm trigger — once per level at a random point
+    if (!storm.active && !wind.active && stormsThisLevel === 0 && baseScore >= nextStormKick) {
+      storm = { active: true, timer: 360, flashTimer: 30, flashAlpha: 0 };
+      stormsThisLevel = 1;
+      haptic("error");
+    }
+
     // Check for level up
     const newLevel = getLevel(baseScore);
     if (newLevel > currentLevel) {
       currentLevel = newLevel;
       levelTransTimer = LEVEL_TRANS_DURATION; // show banner
+      // Schedule next storm randomly within new level
+      stormsThisLevel = 0;
+      var nextThreshold = currentLevel < LEVELS.length - 1 ? LEVELS[currentLevel + 1].threshold : baseScore + 50;
+      var levelRange = nextThreshold - baseScore;
+      nextStormKick = baseScore + 5 + Math.floor(Math.random() * (levelRange - 10));
       haptic([
         { duration: 80, intensity: 1 },
         { delay: 40, duration: 120, intensity: 1 },
@@ -914,6 +967,12 @@ canvas.addEventListener("mousedown", function (e) {
 // Draw the hit zone (full-width rectangle, shrinks to 4px line)
 let zonePulseTimer = 0;
 
+// Sweet spot — 10px strip in center of zone
+const SWEET_SPOT_START = 30;
+const SWEET_SPOT_MIN = 10;
+let sweetStreak = 0;
+let sweetText = { active: false, x: 0, y: 0, alpha: 0, scale: 1, text: '' };
+
 function drawZone() {
   const zoneTop = ZONE_CENTER_Y - zoneHeight / 2;
 
@@ -939,6 +998,22 @@ function drawZone() {
   ctx.lineTo(CSS_W, zoneTop);
   ctx.moveTo(0, zoneTop + zoneHeight);
   ctx.lineTo(CSS_W, zoneTop + zoneHeight);
+  ctx.stroke();
+
+  // Sweet spot strip — shrinks with zone
+  var ssProgress = DEBUG_HARD_MODE ? 1 : Math.min(baseScore / ZONE_SHRINK_SCORE, 1);
+  var ssHeight = Math.max(SWEET_SPOT_MIN, SWEET_SPOT_START - (SWEET_SPOT_START - SWEET_SPOT_MIN) * ssProgress);
+  var ssTop = ZONE_CENTER_Y - ssHeight / 2;
+  var ssAlpha = 0.35 + (sweetStreak > 0 ? Math.sin(Date.now() * 0.008) * 0.15 : 0);
+  ctx.fillStyle = "rgba(0, 220, 0, " + ssAlpha + ")";
+  ctx.fillRect(0, ssTop, CSS_W, ssHeight);
+  ctx.strokeStyle = "rgba(0, 255, 100, 0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, ssTop);
+  ctx.lineTo(CSS_W, ssTop);
+  ctx.moveTo(0, ssTop + ssHeight);
+  ctx.lineTo(CSS_W, ssTop + ssHeight);
   ctx.stroke();
 }
 
@@ -1012,7 +1087,7 @@ function drawLevelTransition() {
 const marqueeImg = new Image();
 marqueeImg.src = "assets/patta-nike-marquee.png";
 const MARQUEE_H = 56;
-const MARQUEE_Y = CSS_H * 0.55 - 2;
+const MARQUEE_Y = CSS_H * 0.7;
 let marqueeX = 0;
 
 function drawMarquee(marqueeDt) {
@@ -1160,6 +1235,191 @@ function drawBonusText() {
   ctx.restore();
 }
 
+// ── WIND SYSTEM ──
+function updateWind(dt) {
+  // Warning phase — arrow indicator
+  if (wind.warningTimer > 0) {
+    wind.warningTimer -= dt;
+    if (wind.warningTimer <= 0) {
+      // Start the actual wind
+      wind.active = true;
+      wind.timer = 120; // ~2 seconds of wind
+      nextWindKick = baseScore + 30 + Math.floor(Math.random() * 21);
+    }
+    return;
+  }
+
+  if (!wind.active) return;
+
+  wind.timer -= dt;
+
+  // Apply force to ball
+  ball.vx += wind.dir * wind.force * dt;
+
+  // Spawn wind line particles
+  for (var wi = 0; wi < 2; wi++) {
+    if (Math.random() < 0.6 * dt) {
+      var startX = wind.dir === 1 ? -10 : CSS_W + 10;
+      var py = Math.random() * CSS_H;
+      windParticles.push({
+        x: startX, y: py,
+        vx: wind.dir * (10 + Math.random() * 6),
+        life: 50 + Math.random() * 30,
+        len: 25 + Math.random() * 30,
+      });
+    }
+  }
+
+  if (wind.timer <= 0) {
+    wind.active = false;
+  }
+}
+
+function updateWindParticles(dt) {
+  for (var i = windParticles.length - 1; i >= 0; i--) {
+    var p = windParticles[i];
+    p.x += p.vx * dt;
+    p.life -= dt;
+    if (p.life <= 0) windParticles.splice(i, 1);
+  }
+}
+
+function drawWind() {
+  // Draw warning arrow
+  if (wind.warningTimer > 0) {
+    var blink = Math.sin(wind.warningTimer * 0.3) > 0;
+    if (blink) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.font = "36px 'Neue Pixel Grotesk', monospace";
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      var arrow = wind.dir === 1 ? ">>>" : "<<<";
+      ctx.fillText(arrow, CSS_W / 2, ZONE_CENTER_Y_BASE);
+      ctx.restore();
+    }
+  }
+
+  // Draw wind line particles
+  ctx.lineWidth = 3;
+  for (var i = 0; i < windParticles.length; i++) {
+    var p = windParticles[i];
+    var alpha = Math.min(p.life / 15, 1) * 0.7;
+    ctx.strokeStyle = "rgba(255, 255, 255, " + alpha + ")";
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - p.vx * 0.5, p.y);
+    ctx.stroke();
+  }
+}
+
+// ── STORM SYSTEM ──
+function updateStorm(dt) {
+  if (!storm.active) return;
+  storm.timer -= dt;
+
+  // Rain intensity fades as timer runs low
+  var fadeOut = 120; // last ~2 seconds fade out
+  var intensity = storm.timer > fadeOut ? 1 : storm.timer / fadeOut;
+
+  // Spawn rain drops — rate decreases during fade
+  for (var ri = 0; ri < 3; ri++) {
+    if (Math.random() < 0.8 * intensity * dt) {
+      rainDrops.push({
+        x: Math.random() * CSS_W,
+        y: -5,
+        vy: 12 + Math.random() * 6,
+        life: 80,
+        len: 8 + Math.random() * 8,
+      });
+    }
+  }
+
+  // Update rain
+  for (var i = rainDrops.length - 1; i >= 0; i--) {
+    var r = rainDrops[i];
+    r.y += r.vy * dt;
+    r.life -= dt;
+    if (r.life <= 0 || r.y > CSS_H) rainDrops.splice(i, 1);
+  }
+
+  // Thunder flash — only at the start
+  if (storm.flashTimer > 0) {
+    storm.flashTimer -= dt;
+    if (storm.flashTimer > 20) {
+      storm.flashAlpha = 0.6;
+    } else if (storm.flashTimer > 15) {
+      storm.flashAlpha = 0;
+    } else if (storm.flashTimer > 5) {
+      storm.flashAlpha = 0.4;
+    } else {
+      storm.flashAlpha = Math.max(0, storm.flashAlpha - 0.05 * dt);
+    }
+  }
+
+  // End when timer runs out AND all rain has fallen
+  if (storm.timer <= 0 && rainDrops.length === 0) {
+    storm.active = false;
+  }
+}
+
+function drawStorm() {
+  if (!storm.active) return;
+
+  // Draw rain
+  ctx.strokeStyle = "rgba(180, 200, 255, 0.5)";
+  ctx.lineWidth = 1.5;
+  for (var i = 0; i < rainDrops.length; i++) {
+    var r = rainDrops[i];
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y);
+    ctx.lineTo(r.x - 1, r.y + r.len);
+    ctx.stroke();
+  }
+
+  // Lightning flash overlay
+  if (storm.flashAlpha > 0) {
+    ctx.fillStyle = "rgba(255, 255, 255, " + storm.flashAlpha + ")";
+    ctx.fillRect(0, 0, CSS_W, CSS_H);
+  }
+
+  // Darken overlay for rain atmosphere — fades with rain
+  var fadeOut = 120;
+  var darkIntensity = storm.timer > fadeOut ? 1 : Math.max(0, storm.timer / fadeOut);
+  if (darkIntensity > 0) {
+    ctx.fillStyle = "rgba(0, 0, 30, " + (0.15 * darkIntensity) + ")";
+    ctx.fillRect(0, 0, CSS_W, CSS_H);
+  }
+}
+
+// ── SWEET SPOT TEXT ──
+function updateSweetText(dt) {
+  if (!sweetText.active) return;
+  sweetText.alpha -= 0.025 * dt;
+  sweetText.scale += 0.01 * dt;
+  sweetText.y -= 0.8 * dt;
+  if (sweetText.alpha <= 0) sweetText.active = false;
+}
+
+function drawSweetText() {
+  if (!sweetText.active) return;
+  ctx.save();
+  ctx.globalAlpha = sweetText.alpha;
+  ctx.translate(sweetText.x, sweetText.y);
+  ctx.scale(sweetText.scale, sweetText.scale);
+  ctx.font = "22px 'Neue Pixel Grotesk', monospace";
+  ctx.fillStyle = "#00ff88";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(sweetText.text, 0, 0);
+  if (sweetStreak >= 3) {
+    ctx.font = "12px 'Neue Pixel Grotesk', monospace";
+    ctx.fillText(sweetStreak + "x STREAK", 0, 16);
+  }
+  ctx.restore();
+}
+
 // Main game loop
 let rafId = null;
 let lastFrameTime = 0;
@@ -1281,6 +1541,15 @@ function update(timestamp) {
       }
     }
 
+    // Wind
+    updateWind(dt);
+    updateWindParticles(dt);
+    drawWind();
+
+    // Storm
+    updateStorm(dt);
+    drawStorm();
+
     // Bonus logo (drawn behind ball)
     updateBonusLogo(dt);
     drawBonusLogo();
@@ -1292,6 +1561,10 @@ function update(timestamp) {
     // Bonus +10 text (drawn on top)
     updateBonusText(dt);
     drawBonusText();
+
+    // Sweet spot text
+    updateSweetText(dt);
+    drawSweetText();
 
     // Score — bottom-left, 63px white, pulses on bonus hit
     if (scorePulse > 0) {
