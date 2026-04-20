@@ -710,6 +710,13 @@ let wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
 let nextWindKick = 30 + Math.floor(Math.random() * 21); // first wind at 25-40 kicks
 var windParticles = [];
 
+// Storm system (rain + thunder) — rare, 1-2 per game
+let storm = { active: false, timer: 0, flashTimer: 0, flashAlpha: 0 };
+// Storm spawns once per level at a random point
+var nextStormKick = 35 + Math.floor(Math.random() * 15); // first storm in level 1, never before kick 10
+var stormsThisLevel = 0;
+var rainDrops = [];
+
 // Hit zone (rectangular)
 let zoneHeight = ZONE_HEIGHT_START;
 
@@ -752,6 +759,10 @@ function resetGame() {
   wind = { active: false, dir: 0, force: 0, timer: 0, warningTimer: 0 };
   nextWindKick = 30 + Math.floor(Math.random() * 21);
   windParticles = [];
+  storm = { active: false, timer: 0, flashTimer: 0, flashAlpha: 0 };
+  nextStormKick = 35 + Math.floor(Math.random() * 15);
+  stormsThisLevel = 0;
+  rainDrops = [];
   zonePulseTimer = 0;
 }
 
@@ -898,11 +909,18 @@ function kick() {
       nextUniteKick = baseScore + 15 + Math.floor(Math.random() * 11);
     }
 
-    // Wind trigger — not during bonus
-    if (!wind.active && !wind.warningTimer && !bonusLogo.active && baseScore >= nextWindKick) {
+    // Wind trigger — not during bonus or storm
+    if (!wind.active && !wind.warningTimer && !bonusLogo.active && !storm.active && baseScore >= nextWindKick) {
       wind.dir = Math.random() > 0.5 ? 1 : -1;
       wind.warningTimer = 60; // ~1 second warning
       wind.force = 0.15 + Math.random() * 0.1;
+    }
+
+    // Storm trigger — once per level at a random point
+    if (!storm.active && !wind.active && stormsThisLevel === 0 && baseScore >= nextStormKick) {
+      storm = { active: true, timer: 360, flashTimer: 30, flashAlpha: 0 };
+      stormsThisLevel = 1;
+      haptic("error");
     }
 
     // Check for level up
@@ -910,6 +928,11 @@ function kick() {
     if (newLevel > currentLevel) {
       currentLevel = newLevel;
       levelTransTimer = LEVEL_TRANS_DURATION; // show banner
+      // Schedule next storm randomly within new level
+      stormsThisLevel = 0;
+      var nextThreshold = currentLevel < LEVELS.length - 1 ? LEVELS[currentLevel + 1].threshold : baseScore + 50;
+      var levelRange = nextThreshold - baseScore;
+      nextStormKick = baseScore + 5 + Math.floor(Math.random() * (levelRange - 10));
       haptic([
         { duration: 80, intensity: 1 },
         { delay: 40, duration: 120, intensity: 1 },
@@ -1291,6 +1314,85 @@ function drawWind() {
   }
 }
 
+// ── STORM SYSTEM ──
+function updateStorm(dt) {
+  if (!storm.active) return;
+  storm.timer -= dt;
+
+  // Rain intensity fades as timer runs low
+  var fadeOut = 120; // last ~2 seconds fade out
+  var intensity = storm.timer > fadeOut ? 1 : storm.timer / fadeOut;
+
+  // Spawn rain drops — rate decreases during fade
+  for (var ri = 0; ri < 3; ri++) {
+    if (Math.random() < 0.8 * intensity * dt) {
+      rainDrops.push({
+        x: Math.random() * CSS_W,
+        y: -5,
+        vy: 12 + Math.random() * 6,
+        life: 80,
+        len: 8 + Math.random() * 8,
+      });
+    }
+  }
+
+  // Update rain
+  for (var i = rainDrops.length - 1; i >= 0; i--) {
+    var r = rainDrops[i];
+    r.y += r.vy * dt;
+    r.life -= dt;
+    if (r.life <= 0 || r.y > CSS_H) rainDrops.splice(i, 1);
+  }
+
+  // Thunder flash — only at the start
+  if (storm.flashTimer > 0) {
+    storm.flashTimer -= dt;
+    if (storm.flashTimer > 20) {
+      storm.flashAlpha = 0.6;
+    } else if (storm.flashTimer > 15) {
+      storm.flashAlpha = 0;
+    } else if (storm.flashTimer > 5) {
+      storm.flashAlpha = 0.4;
+    } else {
+      storm.flashAlpha = Math.max(0, storm.flashAlpha - 0.05 * dt);
+    }
+  }
+
+  // End when timer runs out AND all rain has fallen
+  if (storm.timer <= 0 && rainDrops.length === 0) {
+    storm.active = false;
+  }
+}
+
+function drawStorm() {
+  if (!storm.active) return;
+
+  // Draw rain
+  ctx.strokeStyle = "rgba(180, 200, 255, 0.5)";
+  ctx.lineWidth = 1.5;
+  for (var i = 0; i < rainDrops.length; i++) {
+    var r = rainDrops[i];
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y);
+    ctx.lineTo(r.x - 1, r.y + r.len);
+    ctx.stroke();
+  }
+
+  // Lightning flash overlay
+  if (storm.flashAlpha > 0) {
+    ctx.fillStyle = "rgba(255, 255, 255, " + storm.flashAlpha + ")";
+    ctx.fillRect(0, 0, CSS_W, CSS_H);
+  }
+
+  // Darken overlay for rain atmosphere — fades with rain
+  var fadeOut = 120;
+  var darkIntensity = storm.timer > fadeOut ? 1 : Math.max(0, storm.timer / fadeOut);
+  if (darkIntensity > 0) {
+    ctx.fillStyle = "rgba(0, 0, 30, " + (0.15 * darkIntensity) + ")";
+    ctx.fillRect(0, 0, CSS_W, CSS_H);
+  }
+}
+
 // ── SWEET SPOT TEXT ──
 function updateSweetText(dt) {
   if (!sweetText.active) return;
@@ -1443,6 +1545,10 @@ function update(timestamp) {
     updateWind(dt);
     updateWindParticles(dt);
     drawWind();
+
+    // Storm
+    updateStorm(dt);
+    drawStorm();
 
     // Bonus logo (drawn behind ball)
     updateBonusLogo(dt);
