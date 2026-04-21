@@ -100,6 +100,8 @@ npx vercel env pull .env.development.local
 npx vercel dev
 ```
 
+> **Note:** `npm install` must be run before `vercel dev` — without `node_modules`, the `/api/leaderboard` (and other) serverless functions fail to resolve `@upstash/redis` and the leaderboard renders "FAILED TO LOAD" in the browser.
+
 ## Redis Schema
 
 | Key | Type | TTL | Purpose |
