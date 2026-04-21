@@ -1672,6 +1672,14 @@ function update(timestamp) {
     } else {
       drawText(score.toString(), 20, CSS_H - 40, 63, "#ffffff", "left");
     }
+
+    // Personal record — top-right, beating it recolors in gold
+    if (highScore > 0) {
+      var beaten = score > highScore;
+      var prColor = beaten ? "#FDDB05" : "#ffffff";
+      var prLabel = beaten ? "NEW PR" : "PR";
+      drawText(prLabel + " " + Math.max(score, highScore), CSS_W - 20, 32, 20, prColor, "right");
+    }
   }
 
   if (state === "over") {
