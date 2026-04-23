@@ -1,5 +1,5 @@
 import { redis } from '../lib/redis.js';
-import { getTopTen } from '../lib/leaderboard.js';
+import { getCachedTopTen, rebuildAndCacheTopTen } from '../lib/leaderboard.js';
 import { containsProfanity } from '../lib/profanity.js';
 import { validateOrigin } from '../lib/origin.js';
 
@@ -66,13 +66,13 @@ export default async function handler(req, res) {
     // Klaviyo error silently ignored
   });
 
-  // 8. Get fresh leaderboard + user rank
-  const [topTen, userRank] = await Promise.all([
-    getTopTen(),
-    redis.zrevrank('leaderboard', emailLower),
-  ]);
-
+  // 8. Get user rank, then fetch top 10 (rebuild cache only if user is in top 10)
+  const userRank = await redis.zrevrank('leaderboard', emailLower);
   const rank = userRank !== null ? userRank + 1 : null;
+
+  const topTen = rank !== null && rank <= 10
+    ? await rebuildAndCacheTopTen()
+    : await getCachedTopTen();
 
   // 9. Return response
   // Send response immediately, let Klaviyo finish in background
