@@ -766,8 +766,8 @@ function resetGame() {
   stormsThisLevel = 0;
   rainDrops = [];
   zonePulseTimer = 0;
-  walker = { active: false, x: 0, frame: 0, pendingSpawn: false };
-  nextWalkerKick = 12 + Math.floor(Math.random() * 9); // first walker between score 12 and 20
+  walker = { active: false, x: 0, frame: 0, pendingSpawn: false, spawnedForLevel: -1 };
+  nextWalkerKick = 12 + Math.floor(Math.random() * 9); // first walker in level 1 (score 12-20)
   levelTransition = false;
   levelTransTimer = 0;
 }
@@ -929,10 +929,10 @@ function kick() {
       haptic("error");
     }
 
-    // Walker trigger — random intervals, not in first 10 hits
-    if (!walker.active && !walker.pendingSpawn && baseScore >= nextWalkerKick) {
+    // Walker trigger — level 1 only, once, around mid-level
+    if (currentLevel === 0 && walker.spawnedForLevel !== 0 && baseScore >= nextWalkerKick) {
       walker.pendingSpawn = true;
-      nextWalkerKick = baseScore + 15 + Math.floor(Math.random() * 21); // next in 15-35 hits
+      walker.spawnedForLevel = 0;
     }
 
     // Check for level up
@@ -940,6 +940,12 @@ function kick() {
     if (newLevel > currentLevel) {
       currentLevel = newLevel;
       levelTransTimer = LEVEL_TRANS_DURATION; // show banner
+      // Levels 2+ — walker crosses right after the banner clears
+      if (walker.spawnedForLevel !== currentLevel) {
+        walker.active = false;
+        walker.pendingSpawn = true;
+        walker.spawnedForLevel = currentLevel;
+      }
       // Schedule next storm randomly within new level
       stormsThisLevel = 0;
       var nextThreshold = currentLevel < LEVELS.length - 1 ? LEVELS[currentLevel + 1].threshold : baseScore + 50;
@@ -1129,12 +1135,13 @@ function drawLevelForeground() {
 }
 
 // ── WALKER (per-level character that walks across the screen on level entry) ──
-const WALKER_SPRITE_W = 210;       // source frame width
-const WALKER_SPRITE_H = 270;       // source frame height
-const WALKER_FRAMES = 20;
-const WALKER_SCALE = 0.4;          // on-screen scale — tweak as needed
-const WALKER_W = WALKER_SPRITE_W * WALKER_SCALE;
-const WALKER_H = WALKER_SPRITE_H * WALKER_SCALE;
+// Sprites are 5-col × 4-row grids (20 frames). Cell size is derived per-image
+// from naturalWidth/5 × naturalHeight/4, so any uniform grid size works.
+const WALKER_COLS = 5;
+const WALKER_ROWS = 4;
+const WALKER_FRAMES = WALKER_COLS * WALKER_ROWS;
+const WALKER_DISPLAY_H = [108, 108, 108, 54]; // per-level on-screen height in px
+const WALKER_FEET_OFFSET = [0, 0, 0, 15];      // per-level feet Y offset (positive = down)
 const WALKER_FEET_Y = CSS_H - 80; // y of feet; above the score counter
 const WALKER_SPEED = 180;          // px/second — tweak to taste
 const WALKER_LOOPS = 2;            // number of times the sprite sequence plays across one crossing
@@ -1146,22 +1153,35 @@ const walkerImages = LEVELS.map((_, i) => {
   return img;
 });
 
-let walker = { active: false, x: 0, frame: 0, pendingSpawn: false };
+let walker = { active: false, x: 0, frame: 0, pendingSpawn: false, spawnedForLevel: -1 };
+
+function walkerDrawSize() {
+  const img = walkerImages[currentLevel];
+  if (!img || !img.complete || img.naturalWidth === 0) return null;
+  const cellW = img.naturalWidth / WALKER_COLS;
+  const cellH = img.naturalHeight / WALKER_ROWS;
+  const displayH = WALKER_DISPLAY_H[currentLevel] ?? 108;
+  const displayW = displayH * (cellW / cellH);
+  return { img, cellW, cellH, displayW, displayH };
+}
 
 function updateWalker(dt) {
-  // Spawn once the level-up banner has cleared (or immediately on game start).
-  if (walker.pendingSpawn && levelTransTimer <= 0) {
+  if (walker.pendingSpawn) {
+    const dims = walkerDrawSize();
+    const offscreenW = dims ? dims.displayW : 100;
     walker.active = true;
-    walker.x = -WALKER_W;
+    walker.x = -offscreenW;
     walker.frame = 0;
     walker.pendingSpawn = false;
   }
   if (!walker.active) return;
+  const dims = walkerDrawSize();
+  const displayW = dims ? dims.displayW : 100;
   const realDtMs = dt * TARGET_DT;
   walker.x += (WALKER_SPEED * realDtMs) / 1000;
   // Frame progresses with screen position — sprite sequence plays WALKER_LOOPS times across the crossing.
-  const travelDistance = CSS_W + WALKER_W;
-  const progress = Math.min(1, (walker.x + WALKER_W) / travelDistance);
+  const travelDistance = CSS_W + displayW;
+  const progress = Math.min(1, (walker.x + displayW) / travelDistance);
   const totalFrames = WALKER_FRAMES * WALKER_LOOPS;
   const step = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
   walker.frame = step % WALKER_FRAMES;
@@ -1170,13 +1190,17 @@ function updateWalker(dt) {
 
 function drawWalker() {
   if (!walker.active) return;
-  const img = walkerImages[currentLevel];
-  if (!img || !img.complete || img.naturalWidth === 0) return;
+  const dims = walkerDrawSize();
+  if (!dims) return;
+  const { img, cellW, cellH, displayW, displayH } = dims;
+  const col = walker.frame % WALKER_COLS;
+  const row = Math.floor(walker.frame / WALKER_COLS);
   ctx.imageSmoothingEnabled = false;
+  const feetY = WALKER_FEET_Y + (WALKER_FEET_OFFSET[currentLevel] ?? 0);
   ctx.drawImage(
     img,
-    walker.frame * WALKER_SPRITE_W, 0, WALKER_SPRITE_W, WALKER_SPRITE_H,
-    walker.x, WALKER_FEET_Y - WALKER_H, WALKER_W, WALKER_H
+    col * cellW, row * cellH, cellW, cellH,
+    walker.x, feetY - displayH, displayW, displayH
   );
 }
 
