@@ -62,9 +62,11 @@ export default async function handler(req, res) {
   await redis.hset(`player:${emailLower}`, { name: name.trim(), email: emailLower, score });
 
   // 7. Klaviyo call (awaited — simpler + reliable across local + prod)
-  console.log('[KLAVIYO] start', { email: emailLower, name: name.trim(), score });
+  const isoCountry = req.headers['x-vercel-ip-country'] || null;
+  const country = resolveCountryName(isoCountry);
+  console.log('[KLAVIYO] start', { email: emailLower, name: name.trim(), score, isoCountry, country });
   try {
-    await subscribeToKlaviyo(emailLower, name.trim(), score);
+    await subscribeToKlaviyo(emailLower, name.trim(), score, country);
   } catch (err) {
     console.error('[KLAVIYO] unexpected error', err);
   }
@@ -166,7 +168,18 @@ async function checkRateLimit(email, ip) {
   return null;
 }
 
-async function subscribeToKlaviyo(email, name, score) {
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
+function resolveCountryName(isoCode) {
+  if (!isoCode) return null;
+  try {
+    return regionNames.of(isoCode) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function subscribeToKlaviyo(email, name, score, country) {
   const apiKey = process.env.KLAVIYO_API_KEY;
   const listId = process.env.KLAVIYO_LIST_ID;
   if (!apiKey || !listId) {
@@ -231,6 +244,7 @@ async function subscribeToKlaviyo(email, name, score) {
         type: 'profile',
         attributes: {
           email,
+          ...(country && { location: { country } }),
           properties: {
             patta_game_username: name,
             patta_game_score: score,
@@ -244,6 +258,6 @@ async function subscribeToKlaviyo(email, name, score) {
   if (!profileRes.ok) {
     console.error('[KLAVIYO] profile-import failed', { status: profileRes.status, body: profileBody });
   } else {
-    console.log('[KLAVIYO] profile-import ok', { status: profileRes.status, email });
+    console.log('[KLAVIYO] profile-import ok', { status: profileRes.status, email, country });
   }
 }
