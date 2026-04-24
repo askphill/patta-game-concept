@@ -105,14 +105,12 @@ export default async function handler(req, res) {
     ? await rebuildAndCacheTopTen()
     : cachedTopTen ?? await rebuildAndCacheTopTen();
 
-  // 9. Return response; let Klaviyo finish in background
+  // 9. Return response
   res.status(200).json({
     rank,
     topTen,
     userEntry: { rank, name: name.trim(), score },
   });
-
-  await klaviyoPromise;
 }
 
 function validateSession(session, score) {
