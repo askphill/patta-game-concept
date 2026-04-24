@@ -61,10 +61,13 @@ export default async function handler(req, res) {
   // 6. Store/update player data
   await redis.hset(`player:${emailLower}`, { name: name.trim(), email: emailLower, score });
 
-  // 7. Klaviyo call (fire-and-forget, don't block response)
-  const klaviyoPromise = subscribeToKlaviyo(emailLower, name.trim(), score).catch((err) => {
-    // Klaviyo error silently ignored
-  });
+  // 7. Klaviyo call (awaited — simpler + reliable across local + prod)
+  console.log('[KLAVIYO] start', { email: emailLower, name: name.trim(), score });
+  try {
+    await subscribeToKlaviyo(emailLower, name.trim(), score);
+  } catch (err) {
+    console.error('[KLAVIYO] unexpected error', err);
+  }
 
   // 8. Get user rank, then fetch top 10 (rebuild cache only if user is in top 10)
   const userRank = await redis.zrevrank('leaderboard', emailLower);
@@ -75,15 +78,11 @@ export default async function handler(req, res) {
     : await getCachedTopTen();
 
   // 9. Return response
-  // Send response immediately, let Klaviyo finish in background
   res.status(200).json({
     rank,
     topTen,
     userEntry: { rank, name: name.trim(), score },
   });
-
-  // Wait for Klaviyo to finish before function terminates
-  await klaviyoPromise;
 }
 
 async function validateSession(sessionId, score) {
@@ -171,10 +170,11 @@ async function subscribeToKlaviyo(email, name, score) {
   const apiKey = process.env.KLAVIYO_API_KEY;
   const listId = process.env.KLAVIYO_LIST_ID;
   if (!apiKey || !listId) {
+    console.warn('[KLAVIYO] skipped — missing env', { hasApiKey: !!apiKey, hasListId: !!listId });
     return;
   }
 
-  const res = await fetch('https://a.klaviyo.com/api/profile-subscription-bulk-create-jobs/', {
+  const subRes = await fetch('https://a.klaviyo.com/api/profile-subscription-bulk-create-jobs/', {
     method: 'POST',
     headers: {
       'Authorization': `Klaviyo-API-Key ${apiKey}`,
@@ -211,6 +211,13 @@ async function subscribeToKlaviyo(email, name, score) {
     }),
   });
 
+  const subBody = await subRes.text();
+  if (!subRes.ok) {
+    console.error('[KLAVIYO] subscription failed', { status: subRes.status, body: subBody });
+  } else {
+    console.log('[KLAVIYO] subscription ok', { status: subRes.status, email, listId });
+  }
+
   // Update profile with custom properties (separate API call)
   const profileRes = await fetch('https://a.klaviyo.com/api/profile-import/', {
     method: 'POST',
@@ -233,4 +240,10 @@ async function subscribeToKlaviyo(email, name, score) {
     }),
   });
 
+  const profileBody = await profileRes.text();
+  if (!profileRes.ok) {
+    console.error('[KLAVIYO] profile-import failed', { status: profileRes.status, body: profileBody });
+  } else {
+    console.log('[KLAVIYO] profile-import ok', { status: profileRes.status, email });
+  }
 }
