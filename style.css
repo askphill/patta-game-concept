@@ -1031,7 +1031,7 @@ canvas.active {
 
 .leaderboard-table-header {
   display: flex;
-  padding: 6px 8px;
+  padding: 6px 12px;
   font-family: "Neue Pixel Grotesk", monospace;
   font-size: 14px;
   color: #fff;
@@ -1048,7 +1048,7 @@ canvas.active {
 
 .lb-header-name {
   flex: 1;
-  padding-left: 13px;
+  padding-left: 30px;
 }
 
 .lb-header-score {
