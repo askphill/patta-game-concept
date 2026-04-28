@@ -19,6 +19,12 @@ function haptic(type, scoreIntensity) {
   haptics.trigger(type, opts);
 }
 
+// ── MUTE STATE ──
+// Persisted across sessions. Gates both SFX and background music.
+let muted = (() => {
+  try { return localStorage.getItem("muted") === "1"; } catch { return false; }
+})();
+
 // ── SOUND EFFECTS ──
 // Web Audio API: decode once, polyphonic playback with no per-clip load lag.
 const KICK_SOUND_SRCS = ["assets/kick-1.wav", "assets/kick-2.wav", "assets/kick-3.wav"];
@@ -65,6 +71,7 @@ function ensureAudio() {
 }
 
 function playSfx(group, volume) {
+  if (muted) return;
   ensureAudio();
   const bank = sfxBuffers[group];
   if (!audioCtx || !bank || !bank.length) return;
@@ -87,6 +94,7 @@ function playDeathSound() { playSfx("death", DEATH_VOLUME); }
 const bgMusic = new Audio("assets/music-victory-lap.mp3");
 bgMusic.loop = true;
 bgMusic.volume = 0.25;
+bgMusic.muted = muted;
 bgMusic.preload = "auto";
 let musicStarted = false;
 function startMusic() {
@@ -103,6 +111,32 @@ function primeOnFirstGesture() {
 }
 window.addEventListener("pointerdown", primeOnFirstGesture);
 window.addEventListener("keydown", primeOnFirstGesture);
+
+// ── MUTE TOGGLE UI ──
+const soundToggleBtn = document.querySelector(".sound-toggle");
+const soundToggleIcon = document.querySelector(".sound-toggle-icon");
+function applyMuteState() {
+  bgMusic.muted = muted;
+  if (soundToggleIcon) {
+    soundToggleIcon.src = muted ? "assets/icon-sound-off.png" : "assets/icon-sound-on.png";
+  }
+  if (soundToggleBtn) {
+    soundToggleBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+    soundToggleBtn.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+  }
+}
+function setMuted(next) {
+  muted = !!next;
+  try { localStorage.setItem("muted", muted ? "1" : "0"); } catch {}
+  applyMuteState();
+}
+applyMuteState();
+if (soundToggleBtn) {
+  soundToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setMuted(!muted);
+  });
+}
 
 // ── RETINA / HiDPI SUPPORT ──
 const DPR = window.devicePixelRatio || 1;
