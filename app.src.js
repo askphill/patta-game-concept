@@ -19,6 +19,50 @@ function haptic(type, scoreIntensity) {
   haptics.trigger(type, opts);
 }
 
+// ── KICK SOUND ──
+// Web Audio API: decode once, polyphonic playback with no per-clip load lag.
+const KICK_SOUND_SRCS = ["assets/kick-1.wav", "assets/kick-2.wav", "assets/kick-3.wav"];
+const KICK_VOLUME = 0.35;
+const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let kickBuffers = [];
+let kickBuffersLoading = false;
+
+function loadKickBuffers() {
+  if (kickBuffersLoading || kickBuffers.length || !audioCtx) return;
+  kickBuffersLoading = true;
+  KICK_SOUND_SRCS.forEach((src, i) => {
+    fetch(src)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => audioCtx.decodeAudioData(buf))
+      .then((decoded) => {
+        kickBuffers[i] = decoded;
+      })
+      .catch(() => {});
+  });
+}
+
+// Browsers require a user gesture to start an AudioContext; call this from any tap/click.
+function ensureAudio() {
+  if (!AudioCtxCtor) return;
+  if (!audioCtx) audioCtx = new AudioCtxCtor();
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  loadKickBuffers();
+}
+
+function playKickSound() {
+  ensureAudio();
+  if (!audioCtx || !kickBuffers.length) return;
+  const buf = kickBuffers[Math.floor(Math.random() * kickBuffers.length)];
+  if (!buf) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  gain.gain.value = KICK_VOLUME;
+  src.connect(gain).connect(audioCtx.destination);
+  src.start(0);
+}
+
 // ── RETINA / HiDPI SUPPORT ──
 const DPR = window.devicePixelRatio || 1;
 const CSS_W = 403;
@@ -508,6 +552,7 @@ function startGame() {
 
 btnPlay.addEventListener("click", (e) => {
   e.stopPropagation(); // Don't trigger skipToMenu
+  ensureAudio(); // unlock + start preloading kick sounds while the player is on the splash
   startGame();
 });
 
@@ -846,6 +891,7 @@ function kick() {
     screenShake = 4;
     spawnParticles(ball.x, ball.y);
     haptic("success", score);
+    playKickSound();
     return;
   }
 
@@ -894,6 +940,7 @@ function kick() {
     screenShake = 4;
     spawnParticles(ball.x, ball.y);
     haptic("success", score);
+    playKickSound();
     updateZone();
 
     // Spawn bonus logo at mid-level points (roughly middle of each level)
