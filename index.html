@@ -74,6 +74,36 @@
                 </form>
             </div>
 
+            <!-- Subscribe overlay -->
+            <div class="subscribe-overlay">
+                <img src="assets/bg-score-submit.jpg" alt="" class="subscribe-bg" />
+                <button class="btn-back btn-back-subscribe" aria-label="Back" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="11" viewBox="0 0 12 11" fill="none"><path d="M6.53711 4.36139H7.62793V7.6319H6.53711V9.81256H4.35742V8.72272H3.26953V3.27155H6.53711V4.36139ZM3.2666 7.6319H2.17676V6.54205H1.08594V5.45123H2.17676V4.36139H3.2666V7.6319ZM9.80859 7.6319H7.62891V4.36139H9.80859V7.6319ZM10.8994 7.6319H9.80957V4.36139H10.8994V7.6319ZM6.53711 3.27057H4.35742V2.18073H6.53711V3.27057Z" fill="#BDBDBD"/><path d="M6.53711 3.27094H7.62793V6.54144H6.53711V8.72211H4.35742V7.63226H3.26953V2.18011H4.35742V1.09027H6.53711V3.27094ZM3.2666 6.54144H2.17676V5.4516H1.08594V4.36078H2.17676V3.27094H3.2666V6.54144ZM9.80859 6.54144H7.62891V3.27094H9.80859V6.54144ZM10.8994 6.54144H9.80957V3.27094H10.8994V6.54144Z" fill="white"/></svg>
+                    <span>BACK</span>
+                </button>
+                <div class="subscribe-header">SIGN UP</div>
+                <div class="subscribe-tagline">Get newsletter updates from Patta.</div>
+                <form class="subscribe-form" autocomplete="off">
+                    <div class="pixel-input">
+                        <input type="text" name="firstName" placeholder="FIRST NAME" maxlength="32" required autocomplete="given-name" />
+                    </div>
+                    <div class="pixel-input">
+                        <input type="email" name="email" placeholder="EMAIL ADDRESS" required autocomplete="email" />
+                    </div>
+                    <div class="subscribe-error"></div>
+                    <div id="turnstile-subscribe-container"></div>
+                    <button type="submit" class="btn-continue btn-subscribe-submit">
+                        <img src="assets/btn-submit.png" alt="Submit" draggable="false" />
+                    </button>
+                    <p class="subscribe-disclaimer">By signing up you agree to receive newsletter updates from Patta.</p>
+                </form>
+                <div class="subscribe-success">
+                    <div class="subscribe-success-title">THANKS,</div>
+                    <div class="subscribe-success-subtitle">YOU'RE IN!</div>
+                    <p class="subscribe-success-text">Look out for newsletter updates from Patta.</p>
+                </div>
+            </div>
+
             <!-- Leaderboard overlay -->
             <div class="leaderboard-overlay">
                 <img src="assets/bg-leaderboard.png" alt="" class="leaderboard-bg" />

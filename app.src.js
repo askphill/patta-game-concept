@@ -172,12 +172,20 @@ const btnContinue = document.querySelector(".btn-continue");
 const leaderboardOverlay = document.querySelector(".leaderboard-overlay");
 const leaderboardRows = document.querySelector(".leaderboard-rows");
 const leaderboardGradient = document.querySelector(".leaderboard-gradient");
-const btnBack = document.querySelector(".btn-back");
+const btnBack = document.querySelector(".leaderboard-overlay .btn-back");
 const btnLeaderboard = document.querySelector(".btn-leaderboard");
+const btnSignup = document.querySelector(".btn-signup");
+const subscribeOverlay = document.querySelector(".subscribe-overlay");
+const subscribeForm = document.querySelector(".subscribe-form");
+const subscribeError = document.querySelector(".subscribe-error");
+const btnSubscribeSubmit = document.querySelector(".btn-subscribe-submit");
+const btnBackSubscribe = document.querySelector(".btn-back-subscribe");
 
 let currentSessionId = null;
 let turnstileToken = null;
 let turnstileWidgetId = null;
+let turnstileSubscribeToken = null;
+let turnstileSubscribeWidgetId = null;
 
 function signPayload(name, email, val, sid) {
   var key = sid + ':' + val + ':' + name.length;
@@ -611,6 +619,16 @@ window.onTurnstileLoad = function() {
     },
     size: 'invisible',
   });
+  turnstileSubscribeWidgetId = turnstile.render('#turnstile-subscribe-container', {
+    sitekey: TURNSTILE_SITE_KEY,
+    callback: function(token) {
+      turnstileSubscribeToken = token;
+    },
+    'error-callback': function() {
+      turnstileSubscribeToken = null;
+    },
+    size: 'invisible',
+  });
 };
 
 function startGame() {
@@ -692,6 +710,106 @@ btnLeaderboard.addEventListener("click", async (e) => {
     leaderboardLoaded = true;
   } catch (err) {
     leaderboardRows.innerHTML = leaderboardHeader + '<div class="leaderboard-loading">FAILED TO LOAD</div>';
+  }
+});
+
+// ── SUBSCRIBE OVERLAY ──
+function showSubscribe() {
+  subscribeOverlay.classList.remove("success-state");
+  subscribeError.textContent = "";
+  btnSubscribeSubmit.disabled = false;
+
+  // Pre-fill from localStorage / score-submit history
+  var savedFirstName = localStorage.getItem("patta_subscribe_first_name");
+  var savedEmail = localStorage.getItem("patta_subscribe_email") || localStorage.getItem("patta_game_email");
+  var firstNameInput = subscribeForm.querySelector('[name="firstName"]');
+  var emailInput = subscribeForm.querySelector('[name="email"]');
+  firstNameInput.value = savedFirstName || "";
+  emailInput.value = savedEmail || "";
+
+  splashPanel.classList.add("subscribe-active");
+
+  if (window.turnstile && turnstileSubscribeWidgetId) {
+    turnstile.reset(turnstileSubscribeWidgetId);
+    turnstileSubscribeToken = null;
+  }
+}
+
+function hideSubscribe() {
+  splashPanel.classList.remove("subscribe-active");
+}
+
+btnSignup.addEventListener("click", (e) => {
+  e.stopPropagation();
+  showSubscribe();
+});
+
+btnBackSubscribe.addEventListener("click", (e) => {
+  e.stopPropagation();
+  hideSubscribe();
+});
+
+subscribeForm.addEventListener("input", () => {
+  subscribeError.textContent = "";
+});
+
+subscribeForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  subscribeError.textContent = "";
+  btnSubscribeSubmit.disabled = true;
+
+  // Wait for Turnstile token (max 5 seconds)
+  if (!turnstileSubscribeToken && window.turnstile) {
+    for (var i = 0; i < 25; i++) {
+      await new Promise(function(r) { setTimeout(r, 200); });
+      if (turnstileSubscribeToken) break;
+    }
+  }
+
+  var formData = new FormData(subscribeForm);
+  var firstName = (formData.get("firstName") || "").trim();
+  var email = (formData.get("email") || "").trim();
+
+  if (!firstName || firstName.length > 32) {
+    subscribeError.textContent = "FIRST NAME MUST BE 1-32 CHARACTERS";
+    btnSubscribeSubmit.disabled = false;
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    subscribeError.textContent = "INVALID EMAIL ADDRESS";
+    btnSubscribeSubmit.disabled = false;
+    return;
+  }
+
+  localStorage.setItem("patta_subscribe_first_name", firstName);
+  localStorage.setItem("patta_subscribe_email", email);
+
+  try {
+    const res = await fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName,
+        email,
+        turnstileToken: turnstileSubscribeToken,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      subscribeError.textContent = (data.error || "SUBSCRIPTION FAILED").toUpperCase();
+      btnSubscribeSubmit.disabled = false;
+      if (window.turnstile && turnstileSubscribeWidgetId) {
+        turnstile.reset(turnstileSubscribeWidgetId);
+        turnstileSubscribeToken = null;
+      }
+      return;
+    }
+
+    subscribeOverlay.classList.add("success-state");
+  } catch (err) {
+    subscribeError.textContent = "NETWORK ERROR. TRY AGAIN.";
+    btnSubscribeSubmit.disabled = false;
   }
 });
 
