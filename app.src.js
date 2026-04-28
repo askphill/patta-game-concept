@@ -417,7 +417,7 @@ const ASSETS_TO_LOAD = [
 let loadedCount = 0;
 let loadingComplete = false;
 const LOAD_TIMEOUT = 10000; // 10 seconds
-const MIN_LOAD_TIME = 2000; // minimum 2 seconds for the loading bar
+const MIN_LOAD_TIME = 600; // floor for the loading bar so the fill is visible
 
 function preloadAssets() {
   const totalAssets = ASSETS_TO_LOAD.length;
@@ -532,7 +532,7 @@ function startPhase3() {
     loadingRow.classList.add("splash-position");
 
     // Wait for splash expand, then show menu
-    setTimeout(startPhase4, 500 + 1500); // 500ms expand + 1500ms hold
+    setTimeout(startPhase4, 500 + 500); // 500ms expand + 500ms hold
   }, 200);
 }
 
