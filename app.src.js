@@ -91,15 +91,22 @@ function playLevelUpSound() { playSfx("levelUp", LEVEL_UP_VOLUME); }
 function playDeathSound() { playSfx("death", DEATH_VOLUME); }
 
 // ── BACKGROUND MUSIC ──
-const bgMusic = new Audio("assets/music-victory-lap.mp3");
-bgMusic.loop = true;
-bgMusic.volume = 0.25;
-bgMusic.muted = muted;
-bgMusic.preload = "auto";
+// Lazy-init: don't fetch the 2MB MP3 until the user makes a gesture.
+// iOS Safari aggressively buffers Audio() with preload="auto", which
+// otherwise dominates first-load time on cellular.
+let bgMusic = null;
 let musicStarted = false;
+function ensureBgMusic() {
+  if (bgMusic) return bgMusic;
+  bgMusic = new Audio("assets/music-victory-lap.mp3");
+  bgMusic.loop = true;
+  bgMusic.volume = 0.25;
+  bgMusic.muted = muted;
+  return bgMusic;
+}
 function startMusic() {
   if (musicStarted) return;
-  bgMusic.play().then(() => { musicStarted = true; }).catch(() => {});
+  ensureBgMusic().play().then(() => { musicStarted = true; }).catch(() => {});
 }
 // Browsers block audio until a user gesture; start music on the first one.
 function primeOnFirstGesture() {
@@ -116,7 +123,7 @@ window.addEventListener("keydown", primeOnFirstGesture);
 const soundToggleBtn = document.querySelector(".sound-toggle");
 const soundToggleIcon = document.querySelector(".sound-toggle-icon");
 function applyMuteState() {
-  bgMusic.muted = muted;
+  if (bgMusic) bgMusic.muted = muted;
   if (soundToggleIcon) {
     soundToggleIcon.src = muted ? "assets/icon-sound-off.png" : "assets/icon-sound-on.png";
   }
@@ -188,6 +195,19 @@ let turnstileWidgetId = null;
 let turnstileSubscribeToken = null;
 let turnstileSubscribeWidgetId = null;
 
+// Lazy-load the Turnstile script — it's a third-party origin (~30KB + DNS/TLS),
+// only needed when the user opens the score-submit or subscribe form.
+let turnstileScriptInjected = false;
+function loadTurnstile() {
+  if (turnstileScriptInjected) return;
+  turnstileScriptInjected = true;
+  const s = document.createElement("script");
+  s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad";
+  s.async = true;
+  s.defer = true;
+  document.head.appendChild(s);
+}
+
 function signPayload(name, email, val, sid) {
   var key = sid + ':' + val + ':' + name.length;
   var hash = 0;
@@ -223,6 +243,7 @@ function showScoreSubmit() {
   splashPanel.classList.remove("game-over");
   splashPanel.classList.add("score-submit-active");
 
+  loadTurnstile();
   // Reset Turnstile for a fresh token if already initialized
   if (window.turnstile && turnstileWidgetId) {
     turnstile.reset(turnstileWidgetId);
@@ -240,8 +261,9 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
   scoreSubmitError.textContent = "";
   btnContinue.disabled = true;
 
-  // Wait for Turnstile token if not ready yet (max 5 seconds)
-  if (!turnstileToken && window.turnstile) {
+  // Wait for Turnstile to load + issue a token (max 5 seconds).
+  // Script is lazy-loaded when the form opens, so it may still be in flight here.
+  if (!turnstileToken) {
     for (var i = 0; i < 25; i++) {
       await new Promise(function(r) { setTimeout(r, 200); });
       if (turnstileToken) break;
@@ -400,9 +422,6 @@ const ASSETS_TO_LOAD = [
   "assets/btn-leaderboard.png",
   "assets/soccer-ball.png",
   "assets/bg-level1.jpg",
-  "assets/bg-level2.jpg",
-  "assets/bg-level3.jpg",
-  "assets/bg-level4.jpg",
   "assets/key-space.png",
   "assets/btn-submit.png",
   "assets/patta-nike-marquee.png",
@@ -413,7 +432,7 @@ const ASSETS_TO_LOAD = [
 let loadedCount = 0;
 let loadingComplete = false;
 const LOAD_TIMEOUT = 10000; // 10 seconds
-const MIN_LOAD_TIME = 2000; // minimum 2 seconds for the loading bar
+const MIN_LOAD_TIME = 600; // floor for the loading bar so the fill is visible
 
 function preloadAssets() {
   const totalAssets = ASSETS_TO_LOAD.length;
@@ -528,12 +547,31 @@ function startPhase3() {
     loadingRow.classList.add("splash-position");
 
     // Wait for splash expand, then show menu
-    setTimeout(startPhase4, 500 + 1500); // 500ms expand + 1500ms hold
+    setTimeout(startPhase4, 500 + 500); // 500ms expand + 500ms hold
   }, 200);
+}
+
+// Warm the cache for assets that aren't needed for first paint but cause
+// visible flashes when the user navigates to them (leaderboard background,
+// later level backgrounds, walker sprites). Idempotent.
+let secondaryPrefetched = false;
+function prefetchSecondaryAssets() {
+  if (secondaryPrefetched) return;
+  secondaryPrefetched = true;
+  // Most likely next click — load first
+  const sky = new Image();
+  sky.src = "assets/bg-leaderboard-sky.jpg";
+  // Game progression assets — by the time the player reaches level 2 these
+  // should be in the browser cache.
+  for (let i = 1; i < LEVELS.length; i++) {
+    ensureLevelBg(i);
+    ensureWalkerImage(i);
+  }
 }
 
 function startPhase4() {
   sessionStorage.setItem("patta-loaded", "1");
+  prefetchSecondaryAssets();
 
   // Animate title from center to top
   splashPanel.classList.add("menu-active");
@@ -572,6 +610,7 @@ function skipToMenu() {
   // Show buttons immediately
   menuButtons.forEach((btn) => btn.classList.add("visible"));
   menuFooter.classList.add("visible");
+  prefetchSecondaryAssets();
 }
 
 overlay.addEventListener("click", (e) => {
@@ -736,6 +775,7 @@ function showSubscribe() {
 
   splashPanel.classList.add("subscribe-active");
 
+  loadTurnstile();
   if (window.turnstile && turnstileSubscribeWidgetId) {
     turnstile.reset(turnstileSubscribeWidgetId);
     turnstileSubscribeToken = null;
@@ -765,8 +805,8 @@ subscribeForm.addEventListener("submit", async (e) => {
   subscribeError.textContent = "";
   btnSubscribeSubmit.disabled = true;
 
-  // Wait for Turnstile token (max 5 seconds)
-  if (!turnstileSubscribeToken && window.turnstile) {
+  // Wait for Turnstile to load + issue a token (max 5 seconds).
+  if (!turnstileSubscribeToken) {
     for (var i = 0; i < 25; i++) {
       await new Promise(function(r) { setTimeout(r, 200); });
       if (turnstileSubscribeToken) break;
@@ -855,6 +895,7 @@ if (sessionStorage.getItem("patta-loaded")) {
     splashPanel.classList.add("visible");
     loadingRow.classList.add("splash-position");
   });
+  prefetchSecondaryAssets();
 } else {
   preloadAssets();
 }
@@ -906,12 +947,16 @@ const LEVELS = [
   },
 ];
 
-// Preload level backgrounds
-LEVELS.forEach((lv) => {
+// Lazy-load level backgrounds. Only level 0 starts loading immediately;
+// higher levels load when the player approaches them, to keep first paint light.
+function ensureLevelBg(idx) {
+  const lv = LEVELS[idx];
+  if (!lv || lv.bgImg) return;
   const img = new Image();
   img.src = lv.bgSrc;
   lv.bgImg = img;
-});
+}
+ensureLevelBg(0);
 
 let currentLevel = 0;
 let levelTransition = false;
@@ -1196,6 +1241,11 @@ function kick() {
       screenShake = 14;
       spawnLevelUpParticles(ball.x, ball.y);
       playLevelUpSound();
+      // Pre-warm the asset cache for the level after this one so it's ready
+      // by the time the player crosses the next threshold.
+      ensureLevelBg(currentLevel + 1);
+      ensureWalkerImage(currentLevel);
+      ensureWalkerImage(currentLevel + 1);
       // Levels 2+ — walker crosses right after the banner clears
       if (walker.spawnedForLevel !== currentLevel) {
         walker.active = false;
@@ -1293,6 +1343,7 @@ function drawZone() {
 }
 
 function drawBackground() {
+  ensureLevelBg(currentLevel);
   const lv = LEVELS[currentLevel];
   const img = lv.bgImg;
 
@@ -1402,16 +1453,22 @@ const WALKER_FEET_Y = CSS_H - 80; // y of feet; above the score counter
 const WALKER_SPEED = 180;          // px/second — tweak to taste
 const WALKER_LOOPS = 2;            // number of times the sprite sequence plays across one crossing
 
-// Preload per-level sprite sheets. Missing files are fine — walker silently skips.
-const walkerImages = LEVELS.map((_, i) => {
+// Lazy-load per-level sprite sheets. Each ~140KB; only fetch when the level is
+// reached. Missing files are fine — walker silently skips.
+const walkerImages = LEVELS.map(() => null);
+function ensureWalkerImage(idx) {
+  if (idx < 0 || idx >= walkerImages.length) return;
+  if (walkerImages[idx]) return;
   const img = new Image();
-  img.src = `assets/walker-level${i + 1}.png`;
-  return img;
-});
+  img.src = `assets/walker-level${idx + 1}.png`;
+  walkerImages[idx] = img;
+}
+ensureWalkerImage(0);
 
 let walker = { active: false, x: 0, frame: 0, pendingSpawn: false, spawnedForLevel: -1 };
 
 function walkerDrawSize() {
+  ensureWalkerImage(currentLevel);
   const img = walkerImages[currentLevel];
   if (!img || !img.complete || img.naturalWidth === 0) return null;
   const cellW = img.naturalWidth / WALKER_COLS;
