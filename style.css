@@ -388,6 +388,10 @@ canvas.active {
 .splash-panel.score-submit-active .menu-buttons,
 .splash-panel.score-submit-active .menu-footer,
 .splash-panel.score-submit-active .menu-marquee,
+.splash-panel.subscribe-active .tournament-title,
+.splash-panel.subscribe-active .menu-buttons,
+.splash-panel.subscribe-active .menu-footer,
+.splash-panel.subscribe-active .menu-marquee,
 .splash-panel.leaderboard-active .menu-buttons,
 .splash-panel.leaderboard-active .menu-footer,
 .splash-panel.leaderboard-active .menu-marquee {
@@ -398,6 +402,7 @@ canvas.active {
 
 .splash-panel.game-active::before,
 .splash-panel.score-submit-active::before,
+.splash-panel.subscribe-active::before,
 .splash-panel.leaderboard-active::before {
   opacity: 0;
   transition: opacity 0.3s var(--ease-out-cubic);
@@ -450,6 +455,7 @@ canvas.active {
 .splash-panel.game-active .menu-marquee,
 .splash-panel.game-over .menu-marquee,
 .splash-panel.score-submit-active .menu-marquee,
+.splash-panel.subscribe-active .menu-marquee,
 .splash-panel.leaderboard-active .menu-marquee {
   animation-play-state: paused !important;
 }
@@ -940,8 +946,159 @@ canvas.active {
   transition-duration: 0.1s;
 }
 
-#turnstile-container {
+#turnstile-container,
+#turnstile-subscribe-container {
   min-height: 0;
+}
+
+/* ── SUBSCRIBE OVERLAY ── */
+.subscribe-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-out-cubic);
+  background: linear-gradient(
+    to bottom,
+    rgba(219, 109, 42, 0) 60%,
+    rgba(219, 109, 42, 0.6) 100%
+  );
+}
+
+.splash-panel.subscribe-active .subscribe-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.subscribe-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.btn-back-subscribe {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.subscribe-header {
+  z-index: 1;
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 56px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-top: 96px;
+  line-height: 1;
+}
+
+.subscribe-tagline {
+  z-index: 1;
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  margin-top: 12px;
+  text-align: center;
+  text-wrap: balance;
+  max-width: 280px;
+}
+
+.subscribe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: calc(100% - 36px);
+  padding: 18px;
+  margin-top: auto;
+  margin-bottom: 36px;
+  z-index: 1;
+}
+
+.subscribe-disclaimer {
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  text-wrap: balance;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  max-width: 260px;
+  margin: 0 auto;
+}
+
+.subscribe-error {
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 14px;
+  color: #ff4444;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  min-height: 14px;
+  text-align: center;
+}
+
+.subscribe-success {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 1;
+  margin: auto 24px;
+  padding: 24px;
+}
+
+.subscribe-overlay.success-state .subscribe-form {
+  display: none;
+}
+
+.subscribe-overlay.success-state .subscribe-success {
+  display: flex;
+}
+
+.subscribe-overlay.success-state .subscribe-header,
+.subscribe-overlay.success-state .subscribe-tagline {
+  display: none;
+}
+
+.subscribe-success-title {
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 64px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  line-height: 1;
+}
+
+.subscribe-success-subtitle {
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 64px;
+  color: #fddb05;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  line-height: 1;
+  margin-top: 6px;
+}
+
+.subscribe-success-text {
+  font-family: "Neue Pixel Grotesk", monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  margin-top: 18px;
+  max-width: 260px;
+  text-wrap: balance;
 }
 
 /* ── LEADERBOARD OVERLAY ── */
