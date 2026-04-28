@@ -19,6 +19,91 @@ function haptic(type, scoreIntensity) {
   haptics.trigger(type, opts);
 }
 
+// ── SOUND EFFECTS ──
+// Web Audio API: decode once, polyphonic playback with no per-clip load lag.
+const KICK_SOUND_SRCS = ["assets/kick-1.wav", "assets/kick-2.wav", "assets/kick-3.wav"];
+const BONUS_SOUND_SRCS = ["assets/bonus-hit.mp3"];
+const LEVEL_UP_SOUND_SRCS = ["assets/level-up.mp3"];
+const DEATH_SOUND_SRCS = ["assets/death.mp3"];
+const KICK_VOLUME = 0.35;
+const BONUS_VOLUME = 0.55;
+const LEVEL_UP_VOLUME = 0.6;
+const DEATH_VOLUME = 0.65;
+const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+const sfxBuffers = { kick: [], bonus: [], levelUp: [], death: [] };
+let sfxLoading = false;
+
+function loadSfxBuffers() {
+  if (sfxLoading || !audioCtx) return;
+  sfxLoading = true;
+  const groups = [
+    { key: "kick", srcs: KICK_SOUND_SRCS },
+    { key: "bonus", srcs: BONUS_SOUND_SRCS },
+    { key: "levelUp", srcs: LEVEL_UP_SOUND_SRCS },
+    { key: "death", srcs: DEATH_SOUND_SRCS },
+  ];
+  groups.forEach(({ key, srcs }) => {
+    srcs.forEach((src, i) => {
+      fetch(src)
+        .then((r) => r.arrayBuffer())
+        .then((buf) => audioCtx.decodeAudioData(buf))
+        .then((decoded) => {
+          sfxBuffers[key][i] = decoded;
+        })
+        .catch(() => {});
+    });
+  });
+}
+
+// Browsers require a user gesture to start an AudioContext; call this from any tap/click.
+function ensureAudio() {
+  if (!AudioCtxCtor) return;
+  if (!audioCtx) audioCtx = new AudioCtxCtor();
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  loadSfxBuffers();
+}
+
+function playSfx(group, volume) {
+  ensureAudio();
+  const bank = sfxBuffers[group];
+  if (!audioCtx || !bank || !bank.length) return;
+  const buf = bank[Math.floor(Math.random() * bank.length)];
+  if (!buf) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  gain.gain.value = volume;
+  src.connect(gain).connect(audioCtx.destination);
+  src.start(0);
+}
+
+function playKickSound() { playSfx("kick", KICK_VOLUME); }
+function playBonusSound() { playSfx("bonus", BONUS_VOLUME); }
+function playLevelUpSound() { playSfx("levelUp", LEVEL_UP_VOLUME); }
+function playDeathSound() { playSfx("death", DEATH_VOLUME); }
+
+// ── BACKGROUND MUSIC ──
+const bgMusic = new Audio("assets/music-victory-lap.mp3");
+bgMusic.loop = true;
+bgMusic.volume = 0.25;
+bgMusic.preload = "auto";
+let musicStarted = false;
+function startMusic() {
+  if (musicStarted) return;
+  bgMusic.play().then(() => { musicStarted = true; }).catch(() => {});
+}
+// Browsers block audio until a user gesture; start music on the first one.
+function primeOnFirstGesture() {
+  startMusic();
+  if (musicStarted) {
+    window.removeEventListener("pointerdown", primeOnFirstGesture);
+    window.removeEventListener("keydown", primeOnFirstGesture);
+  }
+}
+window.addEventListener("pointerdown", primeOnFirstGesture);
+window.addEventListener("keydown", primeOnFirstGesture);
+
 // ── RETINA / HiDPI SUPPORT ──
 const DPR = window.devicePixelRatio || 1;
 const CSS_W = 403;
@@ -473,6 +558,7 @@ function showGameOver() {
   gameOverScore.textContent = score;
   splashPanel.classList.add("game-over");
   gameOverTime = Date.now();
+  playDeathSound();
 }
 
 function hideGameOver() {
@@ -508,6 +594,7 @@ function startGame() {
 
 btnPlay.addEventListener("click", (e) => {
   e.stopPropagation(); // Don't trigger skipToMenu
+  ensureAudio(); // unlock + start preloading kick sounds while the player is on the splash
   startGame();
 });
 
@@ -671,6 +758,8 @@ let currentLevel = 0;
 let levelTransition = false;
 let levelTransTimer = 0;
 const LEVEL_TRANS_DURATION = 90;
+let levelFlashTimer = 0; // white screen-flash on level up
+const LEVEL_FLASH_DURATION = 22;
 
 function getLevel(s) {
   for (let i = LEVELS.length - 1; i >= 0; i--) {
@@ -770,6 +859,7 @@ function resetGame() {
   nextWalkerKick = 12 + Math.floor(Math.random() * 9); // first walker in level 1 (score 12-20)
   levelTransition = false;
   levelTransTimer = 0;
+  levelFlashTimer = 0;
 }
 
 function ballInZone() {
@@ -846,6 +936,7 @@ function kick() {
     screenShake = 4;
     spawnParticles(ball.x, ball.y);
     haptic("success", score);
+    playKickSound();
     return;
   }
 
@@ -871,6 +962,7 @@ function kick() {
       scorePulse = 30; // trigger score animation
       screenShake = 6;
       spawnBonusParticles(ball.x, ball.y);
+      playBonusSound();
     }
 
     // Check sweet spot hit
@@ -894,6 +986,7 @@ function kick() {
     screenShake = 4;
     spawnParticles(ball.x, ball.y);
     haptic("success", score);
+    playKickSound();
     updateZone();
 
     // Spawn bonus logo at mid-level points (roughly middle of each level)
@@ -940,6 +1033,10 @@ function kick() {
     if (newLevel > currentLevel) {
       currentLevel = newLevel;
       levelTransTimer = LEVEL_TRANS_DURATION; // show banner
+      levelFlashTimer = LEVEL_FLASH_DURATION;
+      screenShake = 14;
+      spawnLevelUpParticles(ball.x, ball.y);
+      playLevelUpSound();
       // Levels 2+ — walker crosses right after the banner clears
       if (walker.spawnedForLevel !== currentLevel) {
         walker.active = false;
@@ -1272,6 +1369,37 @@ function spawnBonusParticles(x, y) {
   }
 }
 
+function spawnLevelUpParticles(x, y) {
+  // Radial ring + secondary chaotic burst, brand-coloured pixel squares.
+  var ringColors = ["#FDDB05", "#00d2d3", "#ffffff"];
+  var burstColors = ["#FDDB05", "#00d2d3", "#FF6B00", "#0051E8", "#ffffff"];
+  var ringCount = 24;
+  for (var i = 0; i < ringCount; i++) {
+    var a = (i / ringCount) * Math.PI * 2;
+    var speed = 7 + Math.random() * 1.5;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed,
+      life: 40 + Math.random() * 10,
+      color: ringColors[Math.floor(Math.random() * ringColors.length)],
+      size: 4 + Math.random() * 2,
+    });
+  }
+  for (var j = 0; j < 20; j++) {
+    var ang = Math.random() * Math.PI * 2;
+    var sp = 2 + Math.random() * 6;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp - 1,
+      life: 30 + Math.random() * 20,
+      color: burstColors[Math.floor(Math.random() * burstColors.length)],
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
 function updateBonusLogo(dt) {
   if (!bonusLogo.active) return;
   bonusLogo.x += bonusLogo.speed * bonusLogo.dir * dt;
@@ -1560,6 +1688,7 @@ function update(timestamp) {
   drawWalker();
 
   if (state === "start") {
+    drawZone();
     drawBall();
   }
 
@@ -1635,19 +1764,37 @@ function update(timestamp) {
     if (levelTransTimer > 0) {
       levelTransTimer -= dt;
       if (levelTransTimer > 0) {
+        const elapsed = LEVEL_TRANS_DURATION - levelTransTimer;
         const alpha = Math.min(levelTransTimer / 30, 1);
+        // Pop-in scale: snap from 0.4 → 1.15 in first 8 frames, settle to 1.0 by frame 16.
+        let scale;
+        if (elapsed < 8) scale = 0.4 + (elapsed / 8) * 0.75;
+        else if (elapsed < 16) scale = 1.15 - ((elapsed - 8) / 8) * 0.15;
+        else scale = 1;
+        ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = "rgba(0,0,0,0.8)";
-        ctx.fillRect(0, CSS_H / 2 - 60, CSS_W, 120);
-        drawText("NEXT LEVEL!", CSS_W / 2, CSS_H / 2 - 15, 28, "#f9d71c");
-        drawText(
-          LEVELS[currentLevel].name,
-          CSS_W / 2,
-          CSS_H / 2 + 18,
-          20,
-          "#ffffff",
-        );
+        ctx.translate(CSS_W / 2, CSS_H / 2);
+        ctx.scale(scale, scale);
+        // Black bar with yellow pixel border
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillRect(-CSS_W / 2, -60, CSS_W, 120);
+        ctx.fillStyle = "#FDDB05";
+        ctx.fillRect(-CSS_W / 2, -60, CSS_W, 4);
+        ctx.fillRect(-CSS_W / 2, 56, CSS_W, 4);
+        drawText("LEVEL UP!", 0, -18, 36, "#FDDB05");
+        drawText(LEVELS[currentLevel].name, 0, 22, 22, "#ffffff");
+        ctx.restore();
         ctx.globalAlpha = 1;
+      }
+    }
+
+    // White screen-flash on level up (drawn over everything in this branch)
+    if (levelFlashTimer > 0) {
+      levelFlashTimer -= dt;
+      if (levelFlashTimer > 0) {
+        const a = Math.min(levelFlashTimer / LEVEL_FLASH_DURATION, 1);
+        ctx.fillStyle = "rgba(255,255,255," + (a * 0.85) + ")";
+        ctx.fillRect(0, 0, CSS_W, CSS_H);
       }
     }
 
