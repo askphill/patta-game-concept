@@ -195,6 +195,19 @@ let turnstileWidgetId = null;
 let turnstileSubscribeToken = null;
 let turnstileSubscribeWidgetId = null;
 
+// Lazy-load the Turnstile script — it's a third-party origin (~30KB + DNS/TLS),
+// only needed when the user opens the score-submit or subscribe form.
+let turnstileScriptInjected = false;
+function loadTurnstile() {
+  if (turnstileScriptInjected) return;
+  turnstileScriptInjected = true;
+  const s = document.createElement("script");
+  s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad";
+  s.async = true;
+  s.defer = true;
+  document.head.appendChild(s);
+}
+
 function signPayload(name, email, val, sid) {
   var key = sid + ':' + val + ':' + name.length;
   var hash = 0;
@@ -230,6 +243,7 @@ function showScoreSubmit() {
   splashPanel.classList.remove("game-over");
   splashPanel.classList.add("score-submit-active");
 
+  loadTurnstile();
   // Reset Turnstile for a fresh token if already initialized
   if (window.turnstile && turnstileWidgetId) {
     turnstile.reset(turnstileWidgetId);
@@ -247,8 +261,9 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
   scoreSubmitError.textContent = "";
   btnContinue.disabled = true;
 
-  // Wait for Turnstile token if not ready yet (max 5 seconds)
-  if (!turnstileToken && window.turnstile) {
+  // Wait for Turnstile to load + issue a token (max 5 seconds).
+  // Script is lazy-loaded when the form opens, so it may still be in flight here.
+  if (!turnstileToken) {
     for (var i = 0; i < 25; i++) {
       await new Promise(function(r) { setTimeout(r, 200); });
       if (turnstileToken) break;
@@ -740,6 +755,7 @@ function showSubscribe() {
 
   splashPanel.classList.add("subscribe-active");
 
+  loadTurnstile();
   if (window.turnstile && turnstileSubscribeWidgetId) {
     turnstile.reset(turnstileSubscribeWidgetId);
     turnstileSubscribeToken = null;
@@ -769,8 +785,8 @@ subscribeForm.addEventListener("submit", async (e) => {
   subscribeError.textContent = "";
   btnSubscribeSubmit.disabled = true;
 
-  // Wait for Turnstile token (max 5 seconds)
-  if (!turnstileSubscribeToken && window.turnstile) {
+  // Wait for Turnstile to load + issue a token (max 5 seconds).
+  if (!turnstileSubscribeToken) {
     for (var i = 0; i < 25; i++) {
       await new Promise(function(r) { setTimeout(r, 200); });
       if (turnstileSubscribeToken) break;
