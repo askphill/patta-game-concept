@@ -70,6 +70,15 @@ export default async function handler(req, res) {
   const [session, emailCount, , ipCount] = await gatePipe.exec();
 
   if (emailCount > 10 || ipCount > 100) {
+    console.log('[submit-score 429]', JSON.stringify({
+      email: emailLower,
+      emailCount,
+      ip: clientIp,
+      ipCount,
+      ua: req.headers['user-agent'] || null,
+      origin: req.headers['origin'] || null,
+      referer: req.headers['referer'] || null,
+    }));
     return res.status(429).json({ error: GENERIC_ERROR });
   }
   const sessionError = validateSession(session, baseScore || score);
