@@ -69,7 +69,7 @@ export default async function handler(req, res) {
   gatePipe.expire(`ratelimit:ip:${clientIp}`, 3600);
   const [session, emailCount, , ipCount] = await gatePipe.exec();
 
-  if (emailCount > 30 || ipCount > 100) {
+  if (emailCount > 60 || ipCount > 100) {
     console.log('[submit-score 429]', JSON.stringify({
       email: emailLower,
       emailCount,
