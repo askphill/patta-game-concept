@@ -162,8 +162,10 @@ function validateInputs(name, email, score, baseScore) {
 
   if (!Number.isInteger(score) || score < 1 || score > 2000) return 'Invalid score';
 
-  // Bonus can't exceed baseScore * 3 (sweet spot streaks + logo bonuses)
-  if (baseScore && score - baseScore > baseScore * 3) return 'Invalid score';
+  // Sweet-streak bonuses scale quadratically (n in a row = n(n+1)/2), so a
+  // single 25-hit streak already exceeds 3× a baseScore of ~80. 5× covers
+  // skilled streak runs; the session plausibility check is the tighter bound.
+  if (baseScore && score - baseScore > baseScore * 5) return 'Invalid score';
 
   return null;
 }
