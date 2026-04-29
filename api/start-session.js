@@ -18,6 +18,13 @@ export default async function handler(req, res) {
   const count = results[0];
 
   if (count > 200) {
+    console.log('[start-session 429]', JSON.stringify({
+      ip,
+      count,
+      ua: req.headers['user-agent'] || null,
+      origin: req.headers['origin'] || null,
+      referer: req.headers['referer'] || null,
+    }));
     return res.status(429).json({ error: 'Too many requests. Try again later.' });
   }
 
