@@ -26,7 +26,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: inputError });
   }
 
-  const cleanFirstName = firstName.trim();
+  const cleanFirstName = firstName
+    .trim()
+    .toLowerCase()
+    .replace(/(^|[\s-])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
   const emailLower = email.toLowerCase().trim();
 
   // 3. Rate limit (per email + per IP, 1-hour window)
