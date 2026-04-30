@@ -46,7 +46,7 @@ export default async function handler(req, res) {
   const country = resolveCountryName(isoCountry);
   console.log('[KLAVIYO] subscribe start', { email: emailLower, firstName: cleanFirstName, country });
   waitUntil(
-    subscribeToKlaviyo(emailLower, { name: cleanFirstName, country })
+    subscribeToKlaviyo(emailLower, { firstName: cleanFirstName, country })
       .catch((err) => console.error('[KLAVIYO] subscribe error', err))
   );
 
