@@ -208,15 +208,6 @@ function loadTurnstile() {
   document.head.appendChild(s);
 }
 
-function signPayload(name, email, val, sid) {
-  var key = sid + ':' + val + ':' + name.length;
-  var hash = 0;
-  for (var i = 0; i < key.length; i++) {
-    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
-  }
-  return hash.toString(36);
-}
-
 async function startSession() {
   try {
     const res = await fetch("/api/start-session", { method: "POST" });
@@ -299,7 +290,6 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
         email,
         _v: score,
         _b: baseScore,
-        _s: signPayload(name, email, score, currentSessionId),
         sessionId: currentSessionId,
         turnstileToken,
       }),
