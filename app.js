@@ -538,14 +538,11 @@ async function generateShareCard(scoreVal, rankVal, nameVal) {
   c.drawImage(pattaLogo, startX, logoY, pattaW, logoH);
   c.drawImage(nikeSwoosh, startX + pattaW + gap, logoY, nikeW, logoH);
 
-  // PNG (not JPEG) — iOS Safari's share-sheet thumbnailer renders
-  // canvas-generated PNGs reliably; JPEGs from canvas.toBlob often
-  // fall back to the generic document icon on iOS.
   return new Promise(function (resolve, reject) {
     card.toBlob(function (blob) {
       if (blob) resolve(blob);
       else reject(new Error("toBlob returned null"));
-    }, "image/png");
+    }, "image/jpeg", 0.92);
   });
 }
 
@@ -564,13 +561,7 @@ function prepareShareCard(scoreVal, rankVal, nameVal) {
   cachedShareFile = null;
   cachedSharePromise = generateShareCard(scoreVal, rankVal, nameVal)
     .then(function (blob) {
-      var f = new File([blob], "patta-score.png", {
-        type: "image/png",
-        // lastModified hints to iOS' thumbnailer that this File has
-        // real metadata to read — without it, the share sheet sometimes
-        // shows a generic document icon instead of an image preview.
-        lastModified: Date.now(),
-      });
+      var f = new File([blob], "patta-score.jpg", { type: "image/jpeg" });
       cachedShareFile = f;
       cachedSharePromise = null;
       return f;
@@ -586,7 +577,7 @@ function downloadShareBlob(file) {
   var url = URL.createObjectURL(file);
   var a = document.createElement("a");
   a.href = url;
-  a.download = "patta-score.png";
+  a.download = "patta-score.jpg";
   document.body.appendChild(a);
   a.click();
   a.remove();
