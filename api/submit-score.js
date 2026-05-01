@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   if (!validateOrigin(req, res)) return;
 
   const GENERIC_ERROR = 'Submission failed. Please try again.';
-  const { name, email, _v: score, _b: baseScore, sessionId, turnstileToken } = req.body;
+  const { n: name, e: email, _s: encoded, sid: sessionId, t: turnstileToken } = req.body;
 
   const clientIpForTurnstile = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
 
@@ -27,11 +27,10 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: GENERIC_ERROR });
   }
 
-  // 2. Validate inputs (user-facing errors for fixable issues)
-  const inputError = validateInputs(name, email, score, baseScore);
-  if (inputError) {
-    console.log('[REJECT] input', inputError, { score });
-    return res.status(400).json({ error: inputError });
+  // 2. Validate name + email (score comes after session decode)
+  const identityError = validateIdentity(name, email);
+  if (identityError) {
+    return res.status(400).json({ error: identityError });
   }
 
   // 3. Check profanity (user-facing, specific message)
@@ -47,8 +46,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Username already taken' });
   }
 
-  if (!sessionId) {
-    console.log('[REJECT] session', 'Missing session ID');
+  if (!sessionId || !encoded) {
+    console.log('[REJECT] session', 'Missing session ID or payload');
     return res.status(403).json({ error: GENERIC_ERROR });
   }
 
@@ -75,6 +74,26 @@ export default async function handler(req, res) {
     }));
     return res.status(429).json({ error: GENERIC_ERROR });
   }
+
+  // 6. Decode scores using the session secret
+  if (!session || !session.secret) {
+    console.log('[REJECT] session', 'Invalid or expired session');
+    return res.status(403).json({ error: GENERIC_ERROR });
+  }
+  const decoded = decodeScores(encoded, session.secret);
+  if (!decoded) {
+    console.log('[REJECT] decode', 'Invalid payload encoding');
+    return res.status(403).json({ error: GENERIC_ERROR });
+  }
+  const { score, baseScore } = decoded;
+
+  // 7. Validate decoded score values
+  const scoreError = validateScores(score, baseScore);
+  if (scoreError) {
+    console.log('[REJECT] input', scoreError, { score });
+    return res.status(400).json({ error: scoreError });
+  }
+
   const sessionCheck = validateSession(session, baseScore || score);
   if (sessionCheck.error) {
     console.log('[REJECT] session', sessionCheck.error);
@@ -82,7 +101,7 @@ export default async function handler(req, res) {
   }
   const elapsedSeconds = sessionCheck.elapsed;
 
-  // 6. Persist score, player data, and username claim in one round-trip.
+  // 8. Persist score, player data, and username claim in one round-trip.
   // baseScore + elapsedSeconds are stored for forensic auditing of suspicious
   // top scores; they don't affect the leaderboard ranking.
   const writePipe = redis.pipeline();
@@ -115,23 +134,25 @@ export default async function handler(req, res) {
       .catch((err) => console.error('[KLAVIYO] unexpected error', err))
   );
 
-  // 8. Fetch rank + cached top 10 together; rebuild only if user landed in top 10
+  // 9. Fetch rank, cached top 10, and actual stored score in one round-trip
   const readPipe = redis.pipeline();
   readPipe.zrevrank('leaderboard', emailLower);
   readPipe.get(TOP_TEN_CACHE_KEY);
-  const [userRank, cachedRaw] = await readPipe.exec();
+  readPipe.zscore('leaderboard', emailLower);
+  const [userRank, cachedRaw, storedScore] = await readPipe.exec();
   const rank = userRank !== null ? userRank + 1 : null;
+  const bestScore = storedScore !== null ? Number(storedScore) : score;
 
   const cachedTopTen = parseCachedTopTen(cachedRaw);
   const topTen = rank !== null && rank <= 10
     ? await rebuildAndCacheTopTen()
     : cachedTopTen ?? await rebuildAndCacheTopTen();
 
-  // 9. Return response
+  // 10. Return response
   res.status(200).json({
     rank,
     topTen,
-    userEntry: { rank, name: name.trim(), score },
+    userEntry: { rank, name: name.trim(), score: bestScore },
   });
 }
 
@@ -162,7 +183,7 @@ async function verifyTurnstile(token, ip) {
   return null;
 }
 
-function validateInputs(name, email, score, baseScore) {
+function validateIdentity(name, email) {
   if (!name || typeof name !== 'string') return 'Name is required';
   if (name.trim().length === 0 || name.trim().length > 16) return 'Name must be 1-16 characters';
   if (!/^[a-zA-Z0-9_@. -]+$/.test(name.trim())) return 'Name contains invalid characters';
@@ -171,6 +192,10 @@ function validateInputs(name, email, score, baseScore) {
   if (!email || typeof email !== 'string') return 'Email is required';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Invalid email format';
 
+  return null;
+}
+
+function validateScores(score, baseScore) {
   if (!Number.isInteger(score) || score < 1 || score > 2000) return 'Invalid score';
 
   // Sweet-streak bonuses scale quadratically (n in a row = n(n+1)/2), so a
@@ -179,4 +204,20 @@ function validateInputs(name, email, score, baseScore) {
   if (baseScore && score - baseScore > baseScore * 5) return 'Invalid score';
 
   return null;
+}
+
+function decodeScores(encoded, secret) {
+  if (typeof encoded !== 'string' || encoded.length !== 16) return null;
+  try {
+    const buf = new Uint8Array(8);
+    for (let i = 0; i < 8; i++) {
+      buf[i] = parseInt(encoded.slice(i * 2, i * 2 + 2), 16) ^
+               parseInt(secret.slice(i * 2, i * 2 + 2), 16);
+    }
+    const score    = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    const baseScore = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+    return { score: score >>> 0, baseScore: baseScore >>> 0 };
+  } catch {
+    return null;
+  }
 }

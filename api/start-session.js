@@ -1,5 +1,5 @@
 import { redis } from '../lib/redis.js';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { validateOrigin } from '../lib/origin.js';
 
 export default async function handler(req, res) {
@@ -28,10 +28,12 @@ export default async function handler(req, res) {
   }
 
   const sessionId = randomUUID();
+  const secret = randomBytes(8).toString('hex');
 
   await redis.set(`session:${sessionId}`, {
     startTime: Date.now(),
+    secret,
   }, { ex: 600 }); // 10-minute TTL
 
-  return res.status(200).json({ sessionId });
+  return res.status(200).json({ sessionId, secret });
 }
