@@ -222,6 +222,9 @@ async function startSession() {
 }
 
 function showScoreSubmit() {
+  // Pause the game loop while the form is open — Safari can't type smoothly at 60fps canvas
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
   scoreSubmitScore.textContent = score;
   scoreSubmitError.textContent = "";
   btnContinue.disabled = false;
@@ -316,6 +319,9 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
     // Store user entry and invalidate leaderboard cache
     localStorage.setItem("patta_game_entry", JSON.stringify(data.userEntry));
     leaderboardLoaded = false;
+
+    // Reset the form so Safari doesn't show the "unsaved changes" beforeunload prompt
+    scoreSubmitForm.reset();
 
     // Show leaderboard with user highlight
     showLeaderboard(data.topTen, data.userEntry);
