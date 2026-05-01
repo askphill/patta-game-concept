@@ -23,7 +23,20 @@ export default async function handler(req, res) {
   // 1. Verify Turnstile token
   const turnstileError = await verifyTurnstile(turnstileToken, clientIpForTurnstile);
   if (turnstileError) {
-    console.log('[REJECT] turnstile', turnstileError);
+    const emailRaw = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const nameRaw = typeof name === 'string' ? name.trim() : '';
+    const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw);
+    console.log('[REJECT] turnstile', turnstileError, JSON.stringify({
+      klaviyo: hasValidEmail ? 'queued' : 'skipped',
+      email: emailRaw || null,
+    }));
+    if (hasValidEmail) {
+      const isoCountry = req.headers['x-vercel-ip-country'] || null;
+      waitUntil(
+        subscribeToKlaviyo(emailRaw, { username: nameRaw, country: resolveCountryName(isoCountry) })
+          .catch((err) => console.error('[KLAVIYO] turnstile-reject error', err))
+      );
+    }
     return res.status(403).json({ error: GENERIC_ERROR });
   }
 
@@ -206,10 +219,10 @@ function validateIdentity(name, email) {
 function validateScores(score, baseScore) {
   if (!Number.isInteger(score) || score < 1 || score > 2000) return 'Invalid score';
 
-  // Sweet-streak bonuses scale quadratically (n in a row = n(n+1)/2), so a
-  // single 25-hit streak already exceeds 3× a baseScore of ~80. 5× covers
-  // skilled streak runs; the session plausibility check is the tighter bound.
-  if (baseScore && score - baseScore > baseScore * 5) return 'Invalid score';
+  // Sweet-streak bonuses scale quadratically (n in a row = n(n+1)/2). Combined
+  // with logo bonuses (~40pts by kick 91), a 34-kick streak reaches ~7× baseScore.
+  // Session plausibility check is the tighter bound.
+  if (baseScore && score - baseScore > baseScore * 7) return 'Invalid score';
 
   return null;
 }

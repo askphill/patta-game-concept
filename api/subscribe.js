@@ -16,7 +16,20 @@ export default async function handler(req, res) {
   const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
   const turnstileError = await verifyTurnstile(turnstileToken, clientIp);
   if (turnstileError) {
-    console.log('[REJECT] subscribe turnstile', turnstileError);
+    const emailRaw = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const firstNameRaw = typeof firstName === 'string' ? firstName.trim() : '';
+    const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw);
+    console.log('[REJECT] subscribe turnstile', turnstileError, JSON.stringify({
+      klaviyo: hasValidEmail ? 'queued' : 'skipped',
+      email: emailRaw || null,
+    }));
+    if (hasValidEmail) {
+      const isoCountry = req.headers['x-vercel-ip-country'] || null;
+      waitUntil(
+        subscribeToKlaviyo(emailRaw, { firstName: firstNameRaw, country: resolveCountryName(isoCountry) })
+          .catch((err) => console.error('[KLAVIYO] subscribe turnstile-reject error', err))
+      );
+    }
     return res.status(403).json({ error: GENERIC_ERROR });
   }
 
