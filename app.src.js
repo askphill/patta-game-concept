@@ -344,6 +344,9 @@ scoreSubmitForm.addEventListener("submit", async (e) => {
     lastSharedScore = data.userEntry && data.userEntry.score;
     lastSharedName = data.userEntry && data.userEntry.name;
     if (btnShareLeaderboard) btnShareLeaderboard.hidden = false;
+    // Pre-generate the share File now so the click handler can call
+    // navigator.share synchronously (required by iOS Safari).
+    prepareShareCard(lastSharedScore, lastSharedRank, lastSharedName);
 
     // Show leaderboard with user highlight
     showLeaderboard(data.topTen, data.userEntry);
@@ -444,6 +447,15 @@ let lastSharedRank = null;
 let lastSharedScore = null;
 let lastSharedName = null;
 
+// Pre-generated share File, cached so the click handler can call
+// navigator.share synchronously. iOS Safari drops the share-sheet
+// preview if too much async work happens between the user gesture
+// (click) and the navigator.share invocation; awaiting font + 4 image
+// loads + toBlob is enough to lose it. Chrome is more lenient.
+let cachedShareFile = null;
+let cachedShareKey = null;
+let cachedSharePromise = null;
+
 function loadShareImage(src) {
   return new Promise(function (resolve, reject) {
     var img = new Image();
@@ -534,38 +546,80 @@ async function generateShareCard(scoreVal, rankVal, nameVal) {
   });
 }
 
+function shareCacheKey(scoreVal, rankVal, nameVal) {
+  return scoreVal + "|" + (rankVal || "") + "|" + (nameVal || "");
+}
+
+// Kick off (or reuse) a background generation of the share File, so
+// the click handler can fire navigator.share synchronously.
+function prepareShareCard(scoreVal, rankVal, nameVal) {
+  var key = shareCacheKey(scoreVal, rankVal, nameVal);
+  if (cachedShareKey === key && (cachedShareFile || cachedSharePromise)) {
+    return cachedSharePromise || Promise.resolve(cachedShareFile);
+  }
+  cachedShareKey = key;
+  cachedShareFile = null;
+  cachedSharePromise = generateShareCard(scoreVal, rankVal, nameVal)
+    .then(function (blob) {
+      var f = new File([blob], "patta-score.jpg", { type: "image/jpeg" });
+      cachedShareFile = f;
+      cachedSharePromise = null;
+      return f;
+    })
+    .catch(function () {
+      cachedSharePromise = null;
+      return null;
+    });
+  return cachedSharePromise;
+}
+
+function downloadShareBlob(file) {
+  var url = URL.createObjectURL(file);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "patta-score.jpg";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+// Called from the click handler. Prefers a synchronous navigator.share
+// when the cache is warm (Safari requirement). Falls back to async
+// generation only when the user clicked before pre-warming finished.
 async function shareScoreCard(button, scoreVal, rankVal, nameVal) {
   if (!button || button.disabled) return;
-  button.disabled = true;
-  try {
-    var blob = await generateShareCard(scoreVal, rankVal, nameVal);
-    var file = new File([blob], "patta-score.jpg", { type: "image/jpeg" });
-    // Only pass the file — adding text/title makes iOS "Copy" duplicate
-    // content (image + text preview) on paste, and Instagram Stories
-    // ignores text anyway.
-    var shareData = { files: [file] };
+  var key = shareCacheKey(scoreVal, rankVal, nameVal);
+  var file = (cachedShareKey === key) ? cachedShareFile : null;
 
+  // Hot path: synchronously hand the cached File to navigator.share so
+  // we stay inside the user-gesture window.
+  if (file) {
+    var shareData = { files: [file] };
     if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {
       try {
-        await navigator.share(shareData);
+        var p = navigator.share(shareData);
+        if (p && p.catch) p.catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          downloadShareBlob(file);
+        });
         return;
       } catch (err) {
-        if (err && err.name === "AbortError") return;
-        // Other share errors fall through to download
+        if (err && err.name !== "AbortError") downloadShareBlob(file);
+        return;
       }
     }
+    downloadShareBlob(file);
+    return;
+  }
 
-    // Fallback: trigger a download so the user can manually post the image.
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "patta-score.jpg";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-  } catch (e) {
-    // Surfacing failure silently is fine here — the button just re-enables.
+  // Cold path: asset/canvas work didn't finish in time. Generate now and
+  // download — Safari has already lost activation, so trying to share
+  // here would fail silently.
+  button.disabled = true;
+  try {
+    file = await prepareShareCard(scoreVal, rankVal, nameVal);
+    if (file) downloadShareBlob(file);
   } finally {
     button.disabled = false;
   }
@@ -919,6 +973,9 @@ btnLeaderboard.addEventListener("click", async (e) => {
       lastSharedRank = storedEntry.rank || null;
       lastSharedName = storedEntry.name || null;
       btnShareLeaderboard.hidden = false;
+      // Pre-generate the share File so iOS Safari can hand it off
+      // synchronously when the user taps share.
+      prepareShareCard(lastSharedScore, lastSharedRank, lastSharedName);
     } else {
       btnShareLeaderboard.hidden = true;
     }
