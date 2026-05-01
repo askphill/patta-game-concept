@@ -1153,6 +1153,13 @@ canvas.active {
   pointer-events: none;
 }
 
+/* The gradient is a "more content below" hint, but when the sticky
+   share button is on screen it becomes the visual end-of-list anyway —
+   suppress the gradient to stop it bleeding into the bottom rows. */
+.leaderboard-overlay:has(.btn-share-leaderboard:not([hidden])) .leaderboard-gradient {
+  display: none;
+}
+
 .leaderboard-top {
   display: flex;
   flex-direction: column;
